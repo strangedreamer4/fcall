@@ -1,1 +1,604 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Voice Call - Realtime</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 90%;
+            max-width: 500px;
+            padding: 30px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background: #5a67d8;
+        }
+
+        button.danger {
+            background: #e53e3e;
+        }
+
+        button.danger:hover {
+            background: #c53030;
+        }
+
+        button.success {
+            background: #48bb78;
+        }
+
+        button.success:hover {
+            background: #38a169;
+        }
+
+        .users-list {
+            margin-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            padding-top: 20px;
+        }
+
+        .user-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f7f7f7;
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .user-item .online {
+            color: #48bb78;
+            font-weight: bold;
+        }
+
+        .user-item .offline {
+            color: #a0aec0;
+        }
+
+        .call-status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            background: #f0f4f8;
+            text-align: center;
+        }
+
+        .incoming-call {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .audio-controls button {
+            width: auto;
+            padding: 10px 20px;
+        }
+
+        #status {
+            padding: 10px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Login Section -->
+        <div id="loginSection">
+            <h2>🔊 Voice Call App</h2>
+            <div class="form-group">
+                <input type="text" id="username" placeholder="Enter your username" autocomplete="off">
+            </div>
+            <button onclick="login()">Login</button>
+        </div>
+
+        <!-- Main App Section -->
+        <div id="appSection" class="hidden">
+            <h2>Welcome, <span id="currentUser"></span>!</h2>
+            <button class="danger" onclick="logout()">Logout</button>
+
+            <div id="status"></div>
+
+            <!-- Online Users -->
+            <div class="users-list">
+                <h3>Online Users</h3>
+                <div id="users"></div>
+            </div>
+
+            <!-- Call Controls -->
+            <div id="callControls" class="hidden">
+                <div class="call-status" id="callStatus"></div>
+                <div class="audio-controls">
+                    <button id="muteBtn" class="success" onclick="toggleMute()">Mute</button>
+                    <button id="endCallBtn" class="danger" onclick="endCall()">End Call</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incoming Call Modal -->
+        <div id="incomingCall" class="incoming-call hidden">
+            <p>Incoming call from <span id="caller"></span></p>
+            <button class="success" onclick="acceptCall()">Accept</button>
+            <button class="danger" onclick="rejectCall()">Reject</button>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCzLlsatVXnqT2XDrFIorlU7a_b0Knh4bY",
+            authDomain: "forworder-fde88.firebaseapp.com",
+            databaseURL: "https://forworder-fde88-default-rtdb.firebaseio.com",
+            projectId: "forworder-fde88",
+            storageBucket: "forworder-fde88.firebasestorage.app",
+            messagingSenderId: "100323042084",
+            appId: "1:100323042084:web:accf4ceb45039f756b89b1",
+            measurementId: "G-M7HXVKLPD2"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const database = getDatabase(app);
+
+        // Make database available globally
+        window.database = database;
+        window.ref = ref;
+        window.set = set;
+        window.onValue = onValue;
+        window.push = push;
+        window.remove = remove;
+        window.onDisconnect = onDisconnect;
+        window.update = update;
+        window.get = get;
+
+        console.log("Firebase initialized successfully!");
+    </script>
+
+    <!-- Main Application Script -->
+    <script>
+        // Global variables
+        let currentUser = null;
+        let currentCall = null;
+        let localStream = null;
+        let peerConnection = null;
+        let onlineUsersRef = null;
+        let callsRef = null;
+        let userCallsRef = null;
+        let isMuted = false;
+        
+        // WebRTC configuration
+        const configuration = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // DOM elements
+        const loginSection = document.getElementById('loginSection');
+        const appSection = document.getElementById('appSection');
+        const currentUserSpan = document.getElementById('currentUser');
+        const usersDiv = document.getElementById('users');
+        const statusDiv = document.getElementById('status');
+        const callControls = document.getElementById('callControls');
+        const callStatus = document.getElementById('callStatus');
+        const incomingCall = document.getElementById('incomingCall');
+        const callerSpan = document.getElementById('caller');
+        const muteBtn = document.getElementById('muteBtn');
+
+        // Login function
+        window.login = async function() {
+            const username = document.getElementById('username').value.trim();
+            
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+
+            try {
+                // Check if username already exists
+                const userRef = ref(database, `users/${username}`);
+                const snapshot = await get(userRef);
+                
+                if (snapshot.exists()) {
+                    alert('Username already taken. Please choose another.');
+                    return;
+                }
+
+                currentUser = username;
+                
+                // Set user as online
+                await set(userRef, {
+                    username: username,
+                    online: true,
+                    lastSeen: Date.now()
+                });
+
+                // Setup onDisconnect to remove user when they leave
+                onDisconnect(userRef).remove();
+
+                // Listen for online users
+                onlineUsersRef = ref(database, 'users');
+                onValue(onlineUsersRef, (snapshot) => {
+                    updateUsersList(snapshot);
+                });
+
+                // Listen for incoming calls
+                userCallsRef = ref(database, `calls/${username}`);
+                onValue(userCallsRef, (snapshot) => {
+                    handleIncomingCall(snapshot);
+                });
+
+                // Show app section
+                loginSection.classList.add('hidden');
+                appSection.classList.remove('hidden');
+                currentUserSpan.textContent = currentUser;
+                
+                updateStatus('Connected', 'success');
+
+            } catch (error) {
+                console.error('Login error:', error);
+                alert('Error logging in. Please try again.');
+            }
+        };
+
+        // Logout function
+        window.logout = async function() {
+            if (currentUser) {
+                // Remove user from database
+                const userRef = ref(database, `users/${currentUser}`);
+                await remove(userRef);
+                
+                // End any active call
+                if (currentCall) {
+                    await endCall();
+                }
+                
+                currentUser = null;
+            }
+            
+            // Hide app section
+            appSection.classList.add('hidden');
+            loginSection.classList.remove('hidden');
+            document.getElementById('username').value = '';
+        };
+
+        // Update users list
+        function updateUsersList(snapshot) {
+            const users = snapshot.val() || {};
+            let html = '';
+            
+            Object.keys(users).forEach(username => {
+                if (username !== currentUser) {
+                    const user = users[username];
+                    html += `
+                        <div class="user-item">
+                            <span>${username}</span>
+                            <span class="online">● Online</span>
+                            <button onclick="startCall('${username}')">Call</button>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (html === '') {
+                html = '<p>No other users online</p>';
+            }
+            
+            usersDiv.innerHTML = html;
+        }
+
+        // Start a call
+        window.startCall = async function(targetUser) {
+            try {
+                updateStatus(`Calling ${targetUser}...`, 'info');
+                
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                // Create peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+                
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Create offer
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                // Store call in Firebase
+                const callId = push(ref(database, 'calls')).key;
+                currentCall = {
+                    id: callId,
+                    from: currentUser,
+                    to: targetUser,
+                    offer: offer,
+                    status: 'ringing'
+                };
+
+                // Save call for target user
+                await set(ref(database, `calls/${targetUser}/${callId}`), currentCall);
+                
+                // Save call for current user
+                await set(ref(database, `calls/${currentUser}/${callId}`), currentCall);
+
+                // Listen for answer
+                onValue(ref(database, `calls/${currentUser}/${callId}`), async (snapshot) => {
+                    const callData = snapshot.val();
+                    if (callData && callData.answer && !currentCall.answered) {
+                        currentCall.answered = true;
+                        await handleAnswer(callData.answer);
+                    }
+                });
+
+                // Show call controls
+                callControls.classList.remove('hidden');
+                callStatus.innerHTML = `Calling ${targetUser}...`;
+                
+            } catch (error) {
+                console.error('Error starting call:', error);
+                updateStatus('Error starting call', 'error');
+            }
+        };
+
+        // Handle incoming call
+        function handleIncomingCall(snapshot) {
+            const calls = snapshot.val();
+            if (!calls) return;
+
+            Object.keys(calls).forEach(callId => {
+                const call = calls[callId];
+                if (call.from !== currentUser && call.status === 'ringing' && !call.answered) {
+                    // Show incoming call notification
+                    callerSpan.textContent = call.from;
+                    incomingCall.classList.remove('hidden');
+                    
+                    // Store call info
+                    currentCall = {
+                        id: callId,
+                        from: call.from,
+                        to: currentUser,
+                        offer: call.offer
+                    };
+                }
+            });
+        }
+
+        // Accept incoming call
+        window.acceptCall = async function() {
+            try {
+                incomingCall.classList.add('hidden');
+                
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                // Create peer connection
+                peerConnection = new RTCPeerConnection(configuration);
+                
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                // Set remote description from offer
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(currentCall.offer));
+
+                // Create answer
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                // Update call in Firebase
+                await update(ref(database, `calls/${currentUser}/${currentCall.id}`), {
+                    answer: answer,
+                    status: 'connected',
+                    answered: true
+                });
+
+                await update(ref(database, `calls/${currentCall.from}/${currentCall.id}`), {
+                    answer: answer,
+                    status: 'connected',
+                    answered: true
+                });
+
+                // Show call controls
+                callControls.classList.remove('hidden');
+                callStatus.innerHTML = `In call with ${currentCall.from}`;
+                
+            } catch (error) {
+                console.error('Error accepting call:', error);
+                updateStatus('Error accepting call', 'error');
+            }
+        };
+
+        // Reject incoming call
+        window.rejectCall = async function() {
+            incomingCall.classList.add('hidden');
+            
+            if (currentCall) {
+                await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
+                await remove(ref(database, `calls/${currentCall.from}/${currentCall.id}`));
+                currentCall = null;
+            }
+        };
+
+        // Handle answer
+        async function handleAnswer(answer) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                callStatus.innerHTML = `In call with ${currentCall.to}`;
+            } catch (error) {
+                console.error('Error handling answer:', error);
+            }
+        }
+
+        // End call
+        window.endCall = async function() {
+            // Close peer connection
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+            }
+
+            // Stop local stream
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+
+            // Remove call from Firebase
+            if (currentCall && currentUser) {
+                await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
+                if (currentCall.to) {
+                    await remove(ref(database, `calls/${currentCall.to}/${currentCall.id}`));
+                }
+                if (currentCall.from) {
+                    await remove(ref(database, `calls/${currentCall.from}/${currentCall.id}`));
+                }
+            }
+
+            // Hide call controls
+            callControls.classList.add('hidden');
+            currentCall = null;
+            updateStatus('Call ended', 'info');
+        };
+
+        // Toggle mute
+        window.toggleMute = function() {
+            if (localStream) {
+                isMuted = !isMuted;
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !isMuted;
+                });
+                muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
+                muteBtn.className = isMuted ? 'danger' : 'success';
+            }
+        };
+
+        // Update status
+        function updateStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.style.color = type === 'error' ? '#e53e3e' : 
+                                   type === 'success' ? '#48bb78' : '#666';
+        }
+
+        // Handle ICE candidates
+        function handleICECandidate(event) {
+            if (event.candidate) {
+                // Send ICE candidate to peer via Firebase
+                if (currentCall) {
+                    const candidateRef = ref(database, `candidates/${currentCall.id}/${currentUser}`);
+                    push(candidateRef, event.candidate.toJSON());
+                }
+            }
+        }
+
+        // Listen for ICE candidates
+        function listenForICECandidates() {
+            if (!currentCall) return;
+            
+            const candidatesRef = ref(database, `candidates/${currentCall.id}`);
+            onValue(candidatesRef, (snapshot) => {
+                const candidates = snapshot.val();
+                if (!candidates) return;
+
+                Object.keys(candidates).forEach(key => {
+                    const candidate = candidates[key];
+                    if (candidate && peerConnection) {
+                        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                    }
+                });
+            });
+        }
+
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            if (currentUser) {
+                remove(ref(database, `users/${currentUser}`));
+            }
+        });
+    </script>
+</body>
+</html>
