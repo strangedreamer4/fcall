@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Voice Call - Realtime</title>
+    <title>Firebase Voice Call - Audio Working Version</title>
     <style>
         * {
             margin: 0;
@@ -44,7 +43,7 @@
             margin-bottom: 20px;
         }
 
-        input {
+        input, select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -53,7 +52,7 @@
             transition: border-color 0.3s;
         }
 
-        input:focus {
+        input:focus, select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -113,10 +112,6 @@
             font-weight: bold;
         }
 
-        .user-item .offline {
-            color: #a0aec0;
-        }
-
         .call-status {
             margin: 20px 0;
             padding: 15px;
@@ -134,6 +129,7 @@
             border-radius: 10px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
             z-index: 1000;
+            min-width: 300px;
         }
 
         .audio-controls {
@@ -141,17 +137,62 @@
             gap: 10px;
             justify-content: center;
             margin: 20px 0;
+            flex-wrap: wrap;
         }
 
         .audio-controls button {
             width: auto;
             padding: 10px 20px;
+            flex: 1;
         }
 
         #status {
             padding: 10px;
             text-align: center;
-            color: #666;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+
+        .debug-panel {
+            margin-top: 20px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 5px;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .debug-panel h4 {
+            margin-bottom: 5px;
+            color: #333;
+        }
+
+        .volume-indicator {
+            height: 20px;
+            background: #e0e0e0;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+
+        .volume-level {
+            height: 100%;
+            width: 0%;
+            background: #48bb78;
+            transition: width 0.1s;
+        }
+
+        .device-selector {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f7f7f7;
+            border-radius: 10px;
+        }
+
+        .device-selector select {
+            margin-top: 5px;
         }
     </style>
 </head>
@@ -171,7 +212,18 @@
             <h2>Welcome, <span id="currentUser"></span>!</h2>
             <button class="danger" onclick="logout()">Logout</button>
 
-            <div id="status"></div>
+            <!-- Audio Test Section -->
+            <div class="device-selector">
+                <h4>🎤 Audio Devices</h4>
+                <select id="microphoneSelect" onchange="changeMicrophone()"></select>
+                <select id="speakerSelect" onchange="changeSpeaker()"></select>
+                <button onclick="testMicrophone()" class="success" style="margin-top: 5px;">Test Microphone</button>
+                <div class="volume-indicator">
+                    <div id="volumeLevel" class="volume-level"></div>
+                </div>
+            </div>
+
+            <div id="status" class="status-info">Connected</div>
 
             <!-- Online Users -->
             <div class="users-list">
@@ -181,9 +233,13 @@
 
             <!-- Call Controls -->
             <div id="callControls" class="hidden">
-                <div class="call-status" id="callStatus"></div>
+                <div class="call-status">
+                    <div id="callStatus">In call with</div>
+                    <div id="callTimer" style="font-size: 1.2em; font-weight: bold; margin-top: 10px;">00:00</div>
+                </div>
                 <div class="audio-controls">
                     <button id="muteBtn" class="success" onclick="toggleMute()">Mute</button>
+                    <button id="speakerBtn" class="success" onclick="toggleSpeaker()">Speaker: On</button>
                     <button id="endCallBtn" class="danger" onclick="endCall()">End Call</button>
                 </div>
             </div>
@@ -191,20 +247,26 @@
 
         <!-- Incoming Call Modal -->
         <div id="incomingCall" class="incoming-call hidden">
-            <p>Incoming call from <span id="caller"></span></p>
-            <button class="success" onclick="acceptCall()">Accept</button>
-            <button class="danger" onclick="rejectCall()">Reject</button>
+            <p>📞 Incoming call from <strong><span id="caller"></span></strong></p>
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button class="success" onclick="acceptCall()" style="flex: 1;">Accept</button>
+                <button class="danger" onclick="rejectCall()" style="flex: 1;">Reject</button>
+            </div>
+        </div>
+
+        <!-- Debug Panel -->
+        <div class="debug-panel" id="debugPanel">
+            <h4>Debug Info</h4>
+            <div id="debugInfo"></div>
         </div>
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
-        // Import Firebase
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
         import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 
-        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyCzLlsatVXnqT2XDrFIorlU7a_b0Knh4bY",
             authDomain: "forworder-fde88.firebaseapp.com",
@@ -216,12 +278,10 @@
             measurementId: "G-M7HXVKLPD2"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const analytics = getAnalytics(app);
         const database = getDatabase(app);
 
-        // Make database available globally
         window.database = database;
         window.ref = ref;
         window.set = set;
@@ -231,8 +291,6 @@
         window.onDisconnect = onDisconnect;
         window.update = update;
         window.get = get;
-
-        console.log("Firebase initialized successfully!");
     </script>
 
     <!-- Main Application Script -->
@@ -241,18 +299,26 @@
         let currentUser = null;
         let currentCall = null;
         let localStream = null;
+        let remoteStream = null;
         let peerConnection = null;
-        let onlineUsersRef = null;
-        let callsRef = null;
-        let userCallsRef = null;
+        let callTimer = null;
+        let callStartTime = null;
         let isMuted = false;
+        let isSpeakerEnabled = true;
+        let audioContext = null;
+        let analyser = null;
+        let volumeInterval = null;
         
         // WebRTC configuration
         const configuration = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' }
+            ],
+            iceCandidatePoolSize: 10
         };
 
         // DOM elements
@@ -263,9 +329,25 @@
         const statusDiv = document.getElementById('status');
         const callControls = document.getElementById('callControls');
         const callStatus = document.getElementById('callStatus');
+        const callTimerDiv = document.getElementById('callTimer');
         const incomingCall = document.getElementById('incomingCall');
         const callerSpan = document.getElementById('caller');
         const muteBtn = document.getElementById('muteBtn');
+        const speakerBtn = document.getElementById('speakerBtn');
+        const debugInfo = document.getElementById('debugInfo');
+        const microphoneSelect = document.getElementById('microphoneSelect');
+        const speakerSelect = document.getElementById('speakerSelect');
+        const volumeLevel = document.getElementById('volumeLevel');
+
+        // Debug logging
+        function addDebug(message) {
+            console.log(message);
+            const time = new Date().toLocaleTimeString();
+            debugInfo.innerHTML = `<div>[${time}] ${message}</div>` + debugInfo.innerHTML;
+            if (debugInfo.children.length > 5) {
+                debugInfo.removeChild(debugInfo.lastChild);
+            }
+        }
 
         // Login function
         window.login = async function() {
@@ -277,86 +359,223 @@
             }
 
             try {
-                // Check if username already exists
+                addDebug(`Attempting to login as ${username}`);
+                
                 const userRef = ref(database, `users/${username}`);
                 const snapshot = await get(userRef);
                 
                 if (snapshot.exists()) {
-                    alert('Username already taken. Please choose another.');
+                    alert('Username already taken');
                     return;
                 }
 
                 currentUser = username;
                 
-                // Set user as online
                 await set(userRef, {
                     username: username,
                     online: true,
                     lastSeen: Date.now()
                 });
 
-                // Setup onDisconnect to remove user when they leave
                 onDisconnect(userRef).remove();
 
                 // Listen for online users
-                onlineUsersRef = ref(database, 'users');
-                onValue(onlineUsersRef, (snapshot) => {
+                onValue(ref(database, 'users'), (snapshot) => {
                     updateUsersList(snapshot);
                 });
 
                 // Listen for incoming calls
-                userCallsRef = ref(database, `calls/${username}`);
-                onValue(userCallsRef, (snapshot) => {
+                onValue(ref(database, `calls/${username}`), (snapshot) => {
                     handleIncomingCall(snapshot);
                 });
 
-                // Show app section
                 loginSection.classList.add('hidden');
                 appSection.classList.remove('hidden');
                 currentUserSpan.textContent = currentUser;
                 
-                updateStatus('Connected', 'success');
+                // Get available audio devices
+                await getAudioDevices();
+                
+                addDebug('Login successful');
+                showStatus('Connected', 'success');
 
             } catch (error) {
-                console.error('Login error:', error);
-                alert('Error logging in. Please try again.');
+                addDebug(`Login error: ${error.message}`);
+                alert('Error logging in');
+            }
+        };
+
+        // Get audio devices
+        async function getAudioDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                
+                const microphones = devices.filter(device => device.kind === 'audioinput');
+                const speakers = devices.filter(device => device.kind === 'audiooutput');
+                
+                microphoneSelect.innerHTML = microphones.map(mic => 
+                    `<option value="${mic.deviceId}">${mic.label || 'Microphone ' + (microphones.indexOf(mic) + 1)}</option>`
+                ).join('');
+                
+                speakerSelect.innerHTML = speakers.map(speaker => 
+                    `<option value="${speaker.deviceId}">${speaker.label || 'Speaker ' + (speakers.indexOf(speaker) + 1)}</option>`
+                ).join('');
+                
+                addDebug(`Found ${microphones.length} microphones, ${speakers.length} speakers`);
+            } catch (err) {
+                addDebug(`Error getting devices: ${err.message}`);
+            }
+        }
+
+        // Test microphone
+        window.testMicrophone = async function() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        deviceId: microphoneSelect.value ? { exact: microphoneSelect.value } : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                
+                // Create audio context for volume monitoring
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                const source = audioContext.createMediaStreamSource(stream);
+                source.connect(analyser);
+                
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                // Monitor volume
+                if (volumeInterval) clearInterval(volumeInterval);
+                volumeInterval = setInterval(() => {
+                    analyser.getByteFrequencyData(dataArray);
+                    const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    const volume = Math.min(100, (average / 128) * 100);
+                    volumeLevel.style.width = volume + '%';
+                    
+                    if (volume > 10) {
+                        addDebug(`Microphone working! Volume level: ${Math.round(volume)}%`);
+                    }
+                }, 100);
+                
+                // Play test tone
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                gainNode.gain.value = 0.1;
+                oscillator.frequency.value = 440;
+                oscillator.start();
+                setTimeout(() => oscillator.stop(), 500);
+                
+                showStatus('Microphone test in progress... Speak into the mic', 'info');
+                
+                // Stop test stream after 3 seconds
+                setTimeout(() => {
+                    stream.getTracks().forEach(track => track.stop());
+                    if (volumeInterval) {
+                        clearInterval(volumeInterval);
+                        volumeLevel.style.width = '0%';
+                    }
+                    if (audioContext) {
+                        audioContext.close();
+                    }
+                    showStatus('Microphone test completed', 'success');
+                }, 3000);
+                
+            } catch (err) {
+                addDebug(`Microphone test failed: ${err.message}`);
+                showStatus('Microphone test failed', 'error');
+            }
+        };
+
+        // Change microphone
+        window.changeMicrophone = async function() {
+            if (localStream) {
+                // Restart local stream with new microphone
+                const tracks = localStream.getAudioTracks();
+                tracks.forEach(track => track.stop());
+                
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            deviceId: microphoneSelect.value ? { exact: microphoneSelect.value } : undefined,
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+                    
+                    const newTrack = newStream.getAudioTracks()[0];
+                    localStream.addTrack(newTrack);
+                    
+                    // Replace track in peer connection
+                    if (peerConnection) {
+                        const sender = peerConnection.getSenders().find(s => s.track.kind === 'audio');
+                        if (sender) {
+                            sender.replaceTrack(newTrack);
+                        }
+                    }
+                    
+                    addDebug('Microphone changed successfully');
+                } catch (err) {
+                    addDebug(`Error changing microphone: ${err.message}`);
+                }
+            }
+        };
+
+        // Change speaker
+        window.changeSpeaker = async function() {
+            if (remoteStream) {
+                try {
+                    const audioElement = document.querySelector('audio');
+                    if (audioElement && speakerSelect.value) {
+                        await audioElement.setSinkId(speakerSelect.value);
+                        addDebug('Speaker changed successfully');
+                    }
+                } catch (err) {
+                    addDebug(`Error changing speaker: ${err.message}`);
+                }
             }
         };
 
         // Logout function
         window.logout = async function() {
             if (currentUser) {
-                // Remove user from database
-                const userRef = ref(database, `users/${currentUser}`);
-                await remove(userRef);
-                
-                // End any active call
+                await remove(ref(database, `users/${currentUser}`));
                 if (currentCall) {
                     await endCall();
                 }
-                
                 currentUser = null;
             }
             
-            // Hide app section
             appSection.classList.add('hidden');
             loginSection.classList.remove('hidden');
             document.getElementById('username').value = '';
+            addDebug('Logged out');
         };
 
-        // Update users list
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status-${type}`;
+        }
+
         function updateUsersList(snapshot) {
             const users = snapshot.val() || {};
             let html = '';
             
             Object.keys(users).forEach(username => {
                 if (username !== currentUser) {
-                    const user = users[username];
                     html += `
                         <div class="user-item">
                             <span>${username}</span>
                             <span class="online">● Online</span>
-                            <button onclick="startCall('${username}')">Call</button>
+                            <button onclick="startCall('${username}')" 
+                                    ${currentCall ? 'disabled' : ''}>
+                                ${currentCall ? 'In Call' : 'Call'}
+                            </button>
                         </div>
                     `;
                 }
@@ -372,55 +591,164 @@
         // Start a call
         window.startCall = async function(targetUser) {
             try {
-                updateStatus(`Calling ${targetUser}...`, 'info');
+                if (currentCall) {
+                    showStatus('Already in a call', 'error');
+                    return;
+                }
+
+                addDebug(`Starting call to ${targetUser}`);
+                showStatus(`Calling ${targetUser}...`, 'info');
                 
-                // Get user media
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                // Get user media with selected microphone
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        deviceId: microphoneSelect.value ? { exact: microphoneSelect.value } : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 1
+                    }, 
+                    video: false 
+                });
+
+                addDebug('Local stream obtained');
                 
                 // Create peer connection
                 peerConnection = new RTCPeerConnection(configuration);
                 
-                // Add local stream
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && currentCall) {
+                        addDebug('Sending ICE candidate');
+                        const candidateRef = ref(database, 
+                            `calls/${targetUser}/${currentCall.id}/candidates/${currentUser}`);
+                        push(candidateRef, event.candidate.toJSON());
+                    }
+                };
+
+                // Handle incoming tracks (this is where remote audio comes in)
+                peerConnection.ontrack = (event) => {
+                    addDebug('Received remote track');
+                    remoteStream = event.streams[0];
+                    
+                    // Create audio element to play remote audio
+                    const audioElement = document.createElement('audio');
+                    audioElement.srcObject = remoteStream;
+                    audioElement.autoplay = true;
+                    audioElement.controls = false;
+                    
+                    // Set speaker if available
+                    if (speakerSelect.value && audioElement.setSinkId) {
+                        audioElement.setSinkId(speakerSelect.value);
+                    }
+                    
+                    document.body.appendChild(audioElement);
+                    
+                    // Ensure audio plays (browsers require user interaction)
+                    audioElement.play().catch(e => addDebug(`Audio play error: ${e.message}`));
+                    
+                    addDebug('Remote audio playing');
+                };
+
+                // Monitor connection state
+                peerConnection.onconnectionstatechange = () => {
+                    addDebug(`Connection state: ${peerConnection.connectionState}`);
+                    if (peerConnection.connectionState === 'connected') {
+                        startCallTimer();
+                        showStatus('Connected', 'success');
+                        callStatus.innerHTML = `In call with ${targetUser}`;
+                    } else if (peerConnection.connectionState === 'disconnected' || 
+                               peerConnection.connectionState === 'failed') {
+                        endCall();
+                    }
+                };
+
+                peerConnection.oniceconnectionstatechange = () => {
+                    addDebug(`ICE connection state: ${peerConnection.iceConnectionState}`);
+                };
+
+                // Add local stream tracks to peer connection
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
+                    addDebug(`Added ${track.kind} track`);
                 });
 
-                // Create offer
-                const offer = await peerConnection.createOffer();
+                // Create and send offer
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    voiceActivityDetection: true
+                });
+                
                 await peerConnection.setLocalDescription(offer);
+                addDebug('Created and set local offer');
 
-                // Store call in Firebase
+                // Create call in Firebase
                 const callId = push(ref(database, 'calls')).key;
-                currentCall = {
+                const callData = {
                     id: callId,
                     from: currentUser,
                     to: targetUser,
-                    offer: offer,
-                    status: 'ringing'
+                    offer: {
+                        type: offer.type,
+                        sdp: offer.sdp
+                    },
+                    status: 'ringing',
+                    timestamp: Date.now()
                 };
 
-                // Save call for target user
-                await set(ref(database, `calls/${targetUser}/${callId}`), currentCall);
-                
-                // Save call for current user
-                await set(ref(database, `calls/${currentUser}/${callId}`), currentCall);
+                currentCall = {
+                    id: callId,
+                    to: targetUser,
+                    data: callData
+                };
+
+                // Save call for both users
+                await set(ref(database, `calls/${targetUser}/${callId}`), callData);
+                await set(ref(database, `calls/${currentUser}/${callId}`), callData);
+                addDebug('Call data saved to Firebase');
 
                 // Listen for answer
-                onValue(ref(database, `calls/${currentUser}/${callId}`), async (snapshot) => {
-                    const callData = snapshot.val();
-                    if (callData && callData.answer && !currentCall.answered) {
+                const answerRef = ref(database, `calls/${currentUser}/${callId}/answer`);
+                onValue(answerRef, async (snapshot) => {
+                    const answer = snapshot.val();
+                    if (answer && peerConnection && !currentCall.answered) {
                         currentCall.answered = true;
-                        await handleAnswer(callData.answer);
+                        try {
+                            await peerConnection.setRemoteDescription(
+                                new RTCSessionDescription(answer)
+                            );
+                            addDebug('Set remote description from answer');
+                        } catch (err) {
+                            addDebug(`Error setting remote description: ${err.message}`);
+                        }
                     }
                 });
 
-                // Show call controls
+                // Listen for ICE candidates from target
+                const candidatesRef = ref(database, 
+                    `calls/${currentUser}/${callId}/candidates/${targetUser}`);
+                onValue(candidatesRef, (snapshot) => {
+                    const candidates = snapshot.val();
+                    if (candidates && peerConnection) {
+                        Object.values(candidates).forEach(candidate => {
+                            if (candidate) {
+                                peerConnection.addIceCandidate(
+                                    new RTCIceCandidate(candidate)
+                                ).catch(err => addDebug(`Error adding ICE candidate: ${err.message}`));
+                            }
+                        });
+                        addDebug('Added ICE candidates from target');
+                    }
+                });
+
                 callControls.classList.remove('hidden');
                 callStatus.innerHTML = `Calling ${targetUser}...`;
                 
             } catch (error) {
-                console.error('Error starting call:', error);
-                updateStatus('Error starting call', 'error');
+                addDebug(`Error starting call: ${error.message}`);
+                showStatus('Error starting call', 'error');
+                cleanupCall();
             }
         };
 
@@ -429,19 +757,21 @@
             const calls = snapshot.val();
             if (!calls) return;
 
-            Object.keys(calls).forEach(callId => {
-                const call = calls[callId];
-                if (call.from !== currentUser && call.status === 'ringing' && !call.answered) {
-                    // Show incoming call notification
+            Object.entries(calls).forEach(([callId, call]) => {
+                if (call.from !== currentUser && 
+                    call.status === 'ringing' && 
+                    !currentCall) {
+                    
+                    addDebug(`Incoming call from ${call.from}`);
                     callerSpan.textContent = call.from;
                     incomingCall.classList.remove('hidden');
                     
-                    // Store call info
                     currentCall = {
                         id: callId,
                         from: call.from,
                         to: currentUser,
-                        offer: call.offer
+                        offer: call.offer,
+                        data: call
                     };
                 }
             });
@@ -452,44 +782,124 @@
             try {
                 incomingCall.classList.add('hidden');
                 
-                // Get user media
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                addDebug(`Accepting call from ${currentCall.from}`);
+                showStatus('Accepting call...', 'info');
                 
-                // Create peer connection
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        deviceId: microphoneSelect.value ? { exact: microphoneSelect.value } : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true,
+                        sampleRate: 48000,
+                        channelCount: 1
+                    }, 
+                    video: false 
+                });
+
+                addDebug('Local stream obtained');
+                
                 peerConnection = new RTCPeerConnection(configuration);
                 
-                // Add local stream
+                // Handle ICE candidates
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate && currentCall) {
+                        addDebug('Sending ICE candidate');
+                        const candidateRef = ref(database, 
+                            `calls/${currentCall.from}/${currentCall.id}/candidates/${currentUser}`);
+                        push(candidateRef, event.candidate.toJSON());
+                    }
+                };
+
+                // Handle incoming tracks
+                peerConnection.ontrack = (event) => {
+                    addDebug('Received remote track');
+                    remoteStream = event.streams[0];
+                    
+                    const audioElement = document.createElement('audio');
+                    audioElement.srcObject = remoteStream;
+                    audioElement.autoplay = true;
+                    audioElement.controls = false;
+                    
+                    if (speakerSelect.value && audioElement.setSinkId) {
+                        audioElement.setSinkId(speakerSelect.value);
+                    }
+                    
+                    document.body.appendChild(audioElement);
+                    audioElement.play().catch(e => addDebug(`Audio play error: ${e.message}`));
+                    
+                    addDebug('Remote audio playing');
+                };
+
+                // Monitor connection state
+                peerConnection.onconnectionstatechange = () => {
+                    addDebug(`Connection state: ${peerConnection.connectionState}`);
+                    if (peerConnection.connectionState === 'connected') {
+                        startCallTimer();
+                        showStatus('Connected', 'success');
+                        callStatus.innerHTML = `In call with ${currentCall.from}`;
+                    }
+                };
+
+                // Add local tracks
                 localStream.getTracks().forEach(track => {
                     peerConnection.addTrack(track, localStream);
                 });
 
                 // Set remote description from offer
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(currentCall.offer));
+                await peerConnection.setRemoteDescription(
+                    new RTCSessionDescription(currentCall.offer)
+                );
+                addDebug('Set remote description from offer');
 
                 // Create answer
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
+                addDebug('Created and set local answer');
 
                 // Update call in Firebase
                 await update(ref(database, `calls/${currentUser}/${currentCall.id}`), {
-                    answer: answer,
-                    status: 'connected',
-                    answered: true
+                    answer: {
+                        type: answer.type,
+                        sdp: answer.sdp
+                    },
+                    status: 'connected'
                 });
 
                 await update(ref(database, `calls/${currentCall.from}/${currentCall.id}`), {
-                    answer: answer,
-                    status: 'connected',
-                    answered: true
+                    answer: {
+                        type: answer.type,
+                        sdp: answer.sdp
+                    },
+                    status: 'connected'
+                });
+                addDebug('Updated call in Firebase with answer');
+
+                // Listen for ICE candidates from caller
+                const candidatesRef = ref(database, 
+                    `calls/${currentUser}/${currentCall.id}/candidates/${currentCall.from}`);
+                onValue(candidatesRef, (snapshot) => {
+                    const candidates = snapshot.val();
+                    if (candidates && peerConnection) {
+                        Object.values(candidates).forEach(candidate => {
+                            if (candidate) {
+                                peerConnection.addIceCandidate(
+                                    new RTCIceCandidate(candidate)
+                                ).catch(err => addDebug(`Error adding ICE candidate: ${err.message}`));
+                            }
+                        });
+                        addDebug('Added ICE candidates from caller');
+                    }
                 });
 
-                // Show call controls
                 callControls.classList.remove('hidden');
                 callStatus.innerHTML = `In call with ${currentCall.from}`;
                 
             } catch (error) {
-                console.error('Error accepting call:', error);
-                updateStatus('Error accepting call', 'error');
+                addDebug(`Error accepting call: ${error.message}`);
+                showStatus('Error accepting call', 'error');
+                cleanupCall();
             }
         };
 
@@ -501,49 +911,73 @@
                 await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
                 await remove(ref(database, `calls/${currentCall.from}/${currentCall.id}`));
                 currentCall = null;
+                addDebug('Call rejected');
             }
         };
 
-        // Handle answer
-        async function handleAnswer(answer) {
-            try {
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                callStatus.innerHTML = `In call with ${currentCall.to}`;
-            } catch (error) {
-                console.error('Error handling answer:', error);
-            }
+        // Start call timer
+        function startCallTimer() {
+            callStartTime = Date.now();
+            if (callTimer) clearInterval(callTimer);
+            
+            callTimer = setInterval(() => {
+                if (callStartTime) {
+                    const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    callTimerDiv.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
         }
 
         // End call
         window.endCall = async function() {
-            // Close peer connection
+            addDebug('Ending call');
+            cleanupCall();
+            
+            if (currentCall && currentUser) {
+                if (currentCall.to) {
+                    await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
+                    await remove(ref(database, `calls/${currentCall.to}/${currentCall.id}`));
+                } else if (currentCall.from) {
+                    await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
+                    await remove(ref(database, `calls/${currentCall.from}/${currentCall.id}`));
+                }
+            }
+            
+            showStatus('Call ended', 'info');
+            currentCall = null;
+        };
+
+        // Clean up call resources
+        function cleanupCall() {
+            if (callTimer) {
+                clearInterval(callTimer);
+                callTimer = null;
+            }
+            callStartTime = null;
+            callTimerDiv.textContent = '00:00';
+
             if (peerConnection) {
                 peerConnection.close();
                 peerConnection = null;
             }
 
-            // Stop local stream
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
 
-            // Remove call from Firebase
-            if (currentCall && currentUser) {
-                await remove(ref(database, `calls/${currentUser}/${currentCall.id}`));
-                if (currentCall.to) {
-                    await remove(ref(database, `calls/${currentCall.to}/${currentCall.id}`));
-                }
-                if (currentCall.from) {
-                    await remove(ref(database, `calls/${currentCall.from}/${currentCall.id}`));
-                }
-            }
+            // Remove any audio elements
+            document.querySelectorAll('audio').forEach(el => el.remove());
 
-            // Hide call controls
             callControls.classList.add('hidden');
-            currentCall = null;
-            updateStatus('Call ended', 'info');
-        };
+            isMuted = false;
+            muteBtn.textContent = 'Mute';
+            muteBtn.className = 'success';
+            
+            addDebug('Call resources cleaned up');
+        }
 
         // Toggle mute
         window.toggleMute = function() {
@@ -554,49 +988,40 @@
                 });
                 muteBtn.textContent = isMuted ? 'Unmute' : 'Mute';
                 muteBtn.className = isMuted ? 'danger' : 'success';
+                addDebug(`Microphone ${isMuted ? 'muted' : 'unmuted'}`);
             }
         };
 
-        // Update status
-        function updateStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.style.color = type === 'error' ? '#e53e3e' : 
-                                   type === 'success' ? '#48bb78' : '#666';
-        }
-
-        // Handle ICE candidates
-        function handleICECandidate(event) {
-            if (event.candidate) {
-                // Send ICE candidate to peer via Firebase
-                if (currentCall) {
-                    const candidateRef = ref(database, `candidates/${currentCall.id}/${currentUser}`);
-                    push(candidateRef, event.candidate.toJSON());
-                }
-            }
-        }
-
-        // Listen for ICE candidates
-        function listenForICECandidates() {
-            if (!currentCall) return;
-            
-            const candidatesRef = ref(database, `candidates/${currentCall.id}`);
-            onValue(candidatesRef, (snapshot) => {
-                const candidates = snapshot.val();
-                if (!candidates) return;
-
-                Object.keys(candidates).forEach(key => {
-                    const candidate = candidates[key];
-                    if (candidate && peerConnection) {
-                        peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                    }
-                });
+        // Toggle speaker
+        window.toggleSpeaker = function() {
+            isSpeakerEnabled = !isSpeakerEnabled;
+            document.querySelectorAll('audio').forEach(el => {
+                el.muted = !isSpeakerEnabled;
             });
-        }
+            speakerBtn.textContent = `Speaker: ${isSpeakerEnabled ? 'On' : 'Off'}`;
+            speakerBtn.className = isSpeakerEnabled ? 'success' : 'danger';
+            addDebug(`Speaker ${isSpeakerEnabled ? 'enabled' : 'disabled'}`);
+        };
 
         // Clean up on page unload
         window.addEventListener('beforeunload', () => {
             if (currentUser) {
                 remove(ref(database, `users/${currentUser}`));
+            }
+            if (currentCall) {
+                endCall();
+            }
+        });
+
+        // Request microphone permission on page load
+        window.addEventListener('load', async () => {
+            try {
+                // Request permission to enumerate devices
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                await getAudioDevices();
+                addDebug('Microphone permission granted');
+            } catch (err) {
+                addDebug(`Microphone permission denied: ${err.message}`);
             }
         });
     </script>
