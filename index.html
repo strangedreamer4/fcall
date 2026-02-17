@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VoiceFlow - Advanced Voice Calling</title>
+    <title>VoiceFlow - Multi-Device Voice Calling</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
         
@@ -253,6 +253,57 @@
 
         .toggle-form:hover {
             color: white;
+        }
+
+        /* Devices info */
+        .devices-info {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .device-item:last-child {
+            border-bottom: none;
+        }
+
+        .device-icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: rgba(102, 126, 234, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+        }
+
+        .device-details {
+            flex: 1;
+        }
+
+        .device-name {
+            color: white;
+            font-size: 0.9em;
+        }
+
+        .device-time {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.75em;
+        }
+
+        .current-device {
+            background: rgba(72, 187, 120, 0.1);
+            border-left: 3px solid #48bb78;
         }
 
         /* User profile */
@@ -711,6 +762,12 @@
                 <button class="danger" onclick="logout()" style="width: auto; padding: 10px 20px; margin: 0;">Logout</button>
             </div>
 
+            <!-- Connected Devices -->
+            <div class="devices-info" id="devicesInfo">
+                <div class="section-title">📱 Connected Devices</div>
+                <div id="devicesList"></div>
+            </div>
+
             <!-- Audio Test Section -->
             <div class="device-selector">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
@@ -824,6 +881,8 @@
         let analyser = null;
         let volumeInterval = null;
         let currentUserId = null;
+        let deviceId = null;
+        let presenceRef = null;
         
         // WebRTC configuration
         const configuration = {
@@ -861,6 +920,28 @@
         const volumePercentage = document.getElementById('volumePercentage');
         const onlineCount = document.getElementById('onlineCount');
         const toast = document.getElementById('toast');
+        const devicesList = document.getElementById('devicesList');
+
+        // Generate unique device ID
+        function generateDeviceId() {
+            const nav = navigator;
+            const screen = window.screen;
+            const device = [
+                nav.userAgent,
+                nav.language,
+                screen.width,
+                screen.height,
+                screen.colorDepth,
+                new Date().getTimezoneOffset()
+            ].join('|');
+            
+            let hash = 0;
+            for (let i = 0; i < device.length; i++) {
+                hash = ((hash << 5) - hash) + device.charCodeAt(i);
+                hash |= 0;
+            }
+            return Math.abs(hash).toString(36);
+        }
 
         // Create particles
         function createParticles() {
@@ -953,8 +1034,9 @@
 
             try {
                 // Check if email already exists
-                const emailRef = ref(database, `users/${email.replace(/\./g, ',')}`);
-                const snapshot = await get(emailRef);
+                const userId = email.replace(/\./g, ',');
+                const userRef = ref(database, `users/${userId}`);
+                const snapshot = await get(userRef);
                 
                 if (snapshot.exists()) {
                     showToast('Email already registered', 'error');
@@ -962,12 +1044,11 @@
                 }
 
                 // Create user
-                const userId = email.replace(/\./g, ',');
-                await set(ref(database, `users/${userId}`), {
+                await set(userRef, {
                     name: name,
                     email: email,
-                    password: btoa(password), // Simple encoding (use proper auth in production)
-                    online: false,
+                    password: btoa(password),
+                    online: {},
                     createdAt: Date.now()
                 });
 
@@ -1012,6 +1093,9 @@
                     return;
                 }
 
+                // Generate device ID
+                deviceId = generateDeviceId();
+                
                 // Login successful
                 currentUser = {
                     id: userId,
@@ -1019,18 +1103,17 @@
                     email: email
                 };
 
-                // Update online status
-                await set(userRef, {
-                    ...userData,
-                    online: true,
-                    lastSeen: Date.now()
+                // Update online status for this device
+                const deviceRef = ref(database, `users/${userId}/online/${deviceId}`);
+                await set(deviceRef, {
+                    deviceId: deviceId,
+                    lastSeen: Date.now(),
+                    userAgent: navigator.userAgent,
+                    platform: navigator.platform
                 });
 
-                // Set onDisconnect
-                onDisconnect(userRef).update({
-                    online: false,
-                    lastSeen: Date.now()
-                });
+                // Set onDisconnect to remove this device
+                onDisconnect(deviceRef).remove();
 
                 // Show app section
                 authSection.classList.add('hidden');
@@ -1040,9 +1123,10 @@
                 userEmail.textContent = email;
                 userAvatar.textContent = userData.name.charAt(0).toUpperCase();
 
-                // Listen for online users
+                // Listen for online users (excluding current user's devices)
                 onValue(ref(database, 'users'), (snapshot) => {
                     updateUsersList(snapshot);
+                    updateDevicesList(snapshot);
                 });
 
                 // Listen for incoming calls
@@ -1060,28 +1144,41 @@
             }
         };
 
-        // Logout
-        window.logout = async function() {
-            if (currentUser) {
-                await update(ref(database, `users/${currentUser.id}`), {
-                    online: false,
-                    lastSeen: Date.now()
-                });
+        // Update devices list
+        function updateDevicesList(snapshot) {
+            if (!currentUser) return;
+            
+            const userData = snapshot.val()?.[currentUser.id];
+            const devices = userData?.online || {};
+            
+            let html = '';
+            let deviceCount = 0;
+            
+            Object.values(devices).forEach(device => {
+                deviceCount++;
+                const isCurrentDevice = device.deviceId === deviceId;
+                const timeAgo = Math.floor((Date.now() - device.lastSeen) / 1000);
+                const timeText = timeAgo < 60 ? 'just now' : 
+                                timeAgo < 3600 ? Math.floor(timeAgo / 60) + 'm ago' :
+                                Math.floor(timeAgo / 3600) + 'h ago';
                 
-                if (currentCall) {
-                    await endCall();
-                }
-                
-                currentUser = null;
+                html += `
+                    <div class="device-item ${isCurrentDevice ? 'current-device' : ''}">
+                        <div class="device-icon">${isCurrentDevice ? '📱' : '💻'}</div>
+                        <div class="device-details">
+                            <div class="device-name">${device.platform || 'Unknown device'} ${isCurrentDevice ? '(This device)' : ''}</div>
+                            <div class="device-time">Active ${timeText}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            if (html === '') {
+                html = '<p style="color: rgba(255,255,255,0.5); padding: 10px;">No other devices connected</p>';
             }
             
-            appSection.classList.add('hidden');
-            authSection.classList.remove('hidden');
-            document.getElementById('loginEmail').value = '';
-            document.getElementById('loginPassword').value = '';
-            
-            showToast('Logged out successfully', 'success');
-        };
+            devicesList.innerHTML = html;
+        }
 
         // Get audio devices
         async function getAudioDevices() {
@@ -1200,17 +1297,31 @@
             }
         };
 
-        // Update users list
+        // Update users list (show only users with at least one online device)
         function updateUsersList(snapshot) {
             const users = snapshot.val() || {};
             let html = '';
-            let onlineCount = 0;
+            let onlineUserCount = 0;
             
             Object.entries(users).forEach(([userId, user]) => {
-                if (userId !== currentUser?.id && user.online) {
-                    onlineCount++;
+                // Skip current user
+                if (userId === currentUser?.id) return;
+                
+                // Check if user has any online devices
+                const devices = user.online || {};
+                const hasOnlineDevices = Object.keys(devices).length > 0;
+                
+                if (hasOnlineDevices) {
+                    onlineUserCount++;
+                    const lastSeen = Object.values(devices)[0]?.lastSeen || Date.now();
+                    const timeAgo = Math.floor((Date.now() - lastSeen) / 1000);
+                    const statusText = timeAgo < 10 ? 'Online' : 
+                                      timeAgo < 60 ? 'Just now' :
+                                      timeAgo < 3600 ? Math.floor(timeAgo / 60) + 'm ago' :
+                                      Math.floor(timeAgo / 3600) + 'h ago';
+                    
                     html += `
-                        <div class="user-item" style="animation-delay: ${onlineCount * 0.1}s">
+                        <div class="user-item" style="animation-delay: ${onlineUserCount * 0.1}s">
                             <div class="user-info">
                                 <div class="avatar" style="width: 40px; height: 40px; font-size: 1em;">
                                     ${user.name.charAt(0).toUpperCase()}
@@ -1218,6 +1329,9 @@
                                 <div>
                                     <div style="color: white; font-weight: 500;">${user.name}</div>
                                     <div style="color: rgba(255,255,255,0.5); font-size: 0.8em;">${user.email}</div>
+                                    <div style="color: #48bb78; font-size: 0.7em; margin-top: 2px;">
+                                        ${statusText} • ${Object.keys(devices).length} device(s)
+                                    </div>
                                 </div>
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px;">
@@ -1233,7 +1347,7 @@
                 }
             });
             
-            document.getElementById('onlineCount').textContent = onlineCount + ' online';
+            onlineCount.textContent = onlineUserCount + ' online';
             
             if (html === '') {
                 html = '<p style="color: rgba(255,255,255,0.5); text-align: center; padding: 20px;">No other users online</p>';
@@ -1241,6 +1355,28 @@
             
             usersDiv.innerHTML = html;
         }
+
+        // Logout
+        window.logout = async function() {
+            if (currentUser && deviceId) {
+                // Remove this device only
+                await remove(ref(database, `users/${currentUser.id}/online/${deviceId}`));
+                
+                if (currentCall) {
+                    await endCall();
+                }
+                
+                currentUser = null;
+                deviceId = null;
+            }
+            
+            appSection.classList.add('hidden');
+            authSection.classList.remove('hidden');
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+            
+            showToast('Logged out successfully', 'success');
+        };
 
         // Start call
         window.startCall = async function(targetId, targetName, targetEmail) {
@@ -1610,9 +1746,20 @@
             showToast(isSpeakerEnabled ? 'Speaker on' : 'Speaker off', 'info');
         };
 
+        // Heartbeat to keep device online
+        function startHeartbeat() {
+            setInterval(async () => {
+                if (currentUser && deviceId) {
+                    const deviceRef = ref(database, `users/${currentUser.id}/online/${deviceId}/lastSeen`);
+                    await set(deviceRef, Date.now());
+                }
+            }, 30000); // Update every 30 seconds
+        }
+
         // Initialize
         window.addEventListener('load', async () => {
             createParticles();
+            startHeartbeat();
             
             try {
                 await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -1623,11 +1770,8 @@
         });
 
         window.addEventListener('beforeunload', () => {
-            if (currentUser) {
-                update(ref(database, `users/${currentUser.id}`), {
-                    online: false,
-                    lastSeen: Date.now()
-                });
+            if (currentUser && deviceId) {
+                remove(ref(database, `users/${currentUser.id}/online/${deviceId}`));
             }
             if (currentCall) {
                 endCall();
