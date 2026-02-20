@@ -1,0 +1,1617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Signal Voice - Admin Panel</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --admin-bg: #0a0c10;
+            --admin-surface: #15181c;
+            --admin-surface-light: #1e2227;
+            --admin-primary: #3b82f6;
+            --admin-primary-dark: #2563eb;
+            --admin-primary-light: #60a5fa;
+            --admin-success: #10b981;
+            --admin-danger: #ef4444;
+            --admin-warning: #f59e0b;
+            --admin-text: #f3f4f6;
+            --admin-text-secondary: #9ca3af;
+            --admin-border: #2d3138;
+            --admin-hover: #2a2f36;
+            --admin-input: #1e2227;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--admin-bg);
+            color: var(--admin-text);
+            min-height: 100vh;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Admin Container */
+        .admin-container {
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .admin-sidebar {
+            width: 280px;
+            background: var(--admin-surface);
+            border-right: 1px solid var(--admin-border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--admin-border);
+        }
+
+        .admin-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .admin-logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--admin-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .admin-profile {
+            padding: 20px;
+            border-bottom: 1px solid var(--admin-border);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .admin-avatar {
+            width: 48px;
+            height: 48px;
+            background: var(--admin-primary);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .admin-info h4 {
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .admin-info p {
+            font-size: 13px;
+            color: var(--admin-text-secondary);
+        }
+
+        .nav-menu {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            color: var(--admin-text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 4px;
+        }
+
+        .nav-item:hover {
+            background: var(--admin-hover);
+            color: var(--admin-text);
+        }
+
+        .nav-item.active {
+            background: var(--admin-primary);
+            color: white;
+        }
+
+        .nav-item i {
+            font-size: 20px;
+        }
+
+        .badge {
+            margin-left: auto;
+            background: var(--admin-danger);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+        }
+
+        /* Main Content */
+        .admin-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .admin-topbar {
+            height: 80px;
+            padding: 0 30px;
+            background: var(--admin-surface);
+            border-bottom: 1px solid var(--admin-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .page-title h2 {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .page-title p {
+            font-size: 14px;
+            color: var(--admin-text-secondary);
+            margin-top: 4px;
+        }
+
+        .top-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .action-btn {
+            width: 42px;
+            height: 42px;
+            border-radius: 12px;
+            background: var(--admin-input);
+            border: 1px solid var(--admin-border);
+            color: var(--admin-text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            background: var(--admin-hover);
+            color: var(--admin-text);
+        }
+
+        /* Content Area */
+        .content-area {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: var(--admin-surface);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .stat-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 16px;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--admin-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .stat-info h3 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .stat-info p {
+            color: var(--admin-text-secondary);
+            font-size: 14px;
+        }
+
+        /* Tables */
+        .table-container {
+            background: var(--admin-surface);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .table-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--admin-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .table-header h3 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .table-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .search-box {
+            position: relative;
+        }
+
+        .search-box input {
+            padding: 10px 15px 10px 40px;
+            background: var(--admin-input);
+            border: 1px solid var(--admin-border);
+            border-radius: 10px;
+            color: var(--admin-text);
+            font-size: 14px;
+            width: 250px;
+        }
+
+        .search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--admin-text-secondary);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 15px 20px;
+            background: var(--admin-surface-light);
+            color: var(--admin-text-secondary);
+            font-weight: 500;
+            font-size: 13px;
+            border-bottom: 1px solid var(--admin-border);
+        }
+
+        td {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--admin-border);
+            font-size: 14px;
+        }
+
+        tr:hover {
+            background: var(--admin-hover);
+        }
+
+        .user-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-badge.online {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10b981;
+        }
+
+        .status-badge.offline {
+            background: rgba(156, 163, 175, 0.1);
+            color: #9ca3af;
+        }
+
+        .status-badge.banned {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .action-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            background: var(--admin-input);
+            border: 1px solid var(--admin-border);
+            color: var(--admin-text-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .action-icon:hover {
+            background: var(--admin-primary);
+            color: white;
+        }
+
+        .action-icon.danger:hover {
+            background: var(--admin-danger);
+        }
+
+        /* Call Monitor */
+        .call-monitor {
+            background: var(--admin-surface);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .call-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            border-bottom: 1px solid var(--admin-border);
+        }
+
+        .call-item:last-child {
+            border-bottom: none;
+        }
+
+        .call-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .call-type {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--admin-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .call-details h4 {
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+
+        .call-details p {
+            font-size: 13px;
+            color: var(--admin-text-secondary);
+        }
+
+        .call-status.active {
+            color: #10b981;
+        }
+
+        .call-timer {
+            font-family: monospace;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .monitor-btn {
+            padding: 8px 16px;
+            background: var(--admin-primary);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .monitor-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Chat Viewer */
+        .chat-viewer {
+            background: var(--admin-surface);
+            border: 1px solid var(--admin-border);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .chat-selector {
+            padding: 20px;
+            border-bottom: 1px solid var(--admin-border);
+            display: flex;
+            gap: 15px;
+        }
+
+        .chat-selector select {
+            flex: 1;
+            padding: 12px;
+            background: var(--admin-input);
+            border: 1px solid var(--admin-border);
+            border-radius: 10px;
+            color: var(--admin-text);
+        }
+
+        .chat-messages-view {
+            padding: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .chat-message-item {
+            padding: 10px;
+            border-bottom: 1px solid var(--admin-border);
+            font-size: 14px;
+        }
+
+        .chat-message-item .sender {
+            color: var(--admin-primary);
+            font-weight: 600;
+            margin-right: 10px;
+        }
+
+        .chat-message-item .time {
+            color: var(--admin-text-secondary);
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        /* Login Panel */
+        .login-container {
+            width: 100%;
+            max-width: 400px;
+            margin: auto;
+        }
+
+        .login-card {
+            background: var(--admin-surface);
+            border-radius: 30px;
+            padding: 40px;
+            border: 1px solid var(--admin-border);
+        }
+
+        .login-logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-logo .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: var(--admin-primary);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 30px;
+            margin: 0 auto 15px;
+        }
+
+        .login-input {
+            width: 100%;
+            padding: 15px;
+            background: var(--admin-input);
+            border: 1px solid var(--admin-border);
+            border-radius: 12px;
+            color: var(--admin-text);
+            margin-bottom: 15px;
+        }
+
+        .login-button {
+            width: 100%;
+            padding: 15px;
+            background: var(--admin-primary);
+            border: none;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: var(--admin-surface);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--admin-text-secondary);
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            margin-bottom: 20px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .modal-btn.primary {
+            background: var(--admin-primary);
+            color: white;
+        }
+
+        .modal-btn.danger {
+            background: var(--admin-danger);
+            color: white;
+        }
+
+        /* Hidden */
+        .hidden {
+            display: none !important;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--admin-border);
+            border-top-color: var(--admin-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .admin-sidebar {
+                position: fixed;
+                left: -280px;
+                height: 100%;
+                z-index: 100;
+                transition: left 0.3s;
+            }
+
+            .admin-sidebar.mobile-visible {
+                left: 0;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Admin Container -->
+    <div id="adminContainer" class="admin-container hidden">
+        <!-- Sidebar -->
+        <div class="admin-sidebar" id="adminSidebar">
+            <div class="sidebar-header">
+                <div class="admin-logo">
+                    <div class="admin-logo-icon">🔒</div>
+                    <span>Admin Panel</span>
+                </div>
+            </div>
+
+            <!-- Admin Profile -->
+            <div class="admin-profile">
+                <div class="admin-avatar" id="adminAvatar">A</div>
+                <div class="admin-info">
+                    <h4 id="adminName">Admin User</h4>
+                    <p id="adminRole">Super Admin</p>
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="nav-menu">
+                <div class="nav-item active" onclick="switchTab('dashboard')">
+                    <i>📊</i>
+                    <span>Dashboard</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('users')">
+                    <i>👥</i>
+                    <span>Users</span>
+                    <span class="badge" id="userBadge">0</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('calls')">
+                    <i>📞</i>
+                    <span>Live Calls</span>
+                    <span class="badge" id="callBadge">0</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('chats')">
+                    <i>💬</i>
+                    <span>Chat Monitor</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('reports')">
+                    <i>🚫</i>
+                    <span>Reports</span>
+                </div>
+                <div class="nav-item" onclick="switchTab('settings')">
+                    <i>⚙️</i>
+                    <span>Settings</span>
+                </div>
+                <div class="nav-item" onclick="logout()">
+                    <i>🚪</i>
+                    <span>Logout</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="admin-main">
+            <!-- Top Bar -->
+            <div class="admin-topbar">
+                <div class="page-title">
+                    <h2 id="pageTitle">Dashboard</h2>
+                    <p id="pageSubtitle">Welcome back, Admin</p>
+                </div>
+                <div class="top-actions">
+                    <button class="action-btn" onclick="refreshData()">
+                        🔄
+                    </button>
+                    <button class="action-btn" onclick="toggleMobileSidebar()" id="mobileMenuBtn">
+                        ☰
+                    </button>
+                </div>
+            </div>
+
+            <!-- Content Area -->
+            <div class="content-area" id="contentArea">
+                <!-- Dashboard Tab -->
+                <div id="dashboardTab">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon">👥</div>
+                            <div class="stat-info">
+                                <h3 id="totalUsers">0</h3>
+                                <p>Total Users</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">🟢</div>
+                            <div class="stat-info">
+                                <h3 id="onlineUsers">0</h3>
+                                <p>Online Now</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">📞</div>
+                            <div class="stat-info">
+                                <h3 id="activeCalls">0</h3>
+                                <p>Active Calls</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">💬</div>
+                            <div class="stat-info">
+                                <h3 id="totalMessages">0</h3>
+                                <p>Total Messages</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Users -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Recent Users</h3>
+                            <div class="search-box">
+                                <i>🔍</i>
+                                <input type="text" id="dashboardSearch" placeholder="Search users..." oninput="searchUsers()">
+                            </div>
+                        </div>
+                        <table id="recentUsersTable">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Devices</th>
+                                    <th>Last Seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentUsersBody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Live Calls Monitor -->
+                    <div class="call-monitor">
+                        <div class="table-header">
+                            <h3>Live Calls</h3>
+                            <span class="badge" id="liveCallCount">0 active</span>
+                        </div>
+                        <div id="liveCallsList"></div>
+                    </div>
+                </div>
+
+                <!-- Users Tab -->
+                <div id="usersTab" class="hidden">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>User Management</h3>
+                            <div class="table-actions">
+                                <div class="search-box">
+                                    <i>🔍</i>
+                                    <input type="text" id="userSearch" placeholder="Search users..." oninput="searchUsersTable()">
+                                </div>
+                                <button class="action-btn" onclick="exportUsers()">📥</button>
+                            </div>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Status</th>
+                                    <th>Devices</th>
+                                    <th>Joined</th>
+                                    <th>Last Seen</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Calls Tab -->
+                <div id="callsTab" class="hidden">
+                    <div class="call-monitor">
+                        <div class="table-header">
+                            <h3>Active Calls</h3>
+                            <button class="monitor-btn" onclick="refreshCalls()">Refresh</button>
+                        </div>
+                        <div id="activeCallsList"></div>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Call History</h3>
+                            <div class="search-box">
+                                <i>🔍</i>
+                                <input type="text" id="callSearch" placeholder="Search calls...">
+                            </div>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>From</th>
+                                    <th>To</th>
+                                    <th>Type</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Time</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="callsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Chats Tab -->
+                <div id="chatsTab" class="hidden">
+                    <div class="chat-viewer">
+                        <div class="chat-selector">
+                            <select id="chatUserSelect" onchange="loadChatMessages()">
+                                <option value="">Select conversation to monitor</option>
+                            </select>
+                            <button class="monitor-btn" onclick="refreshChats()">Refresh</button>
+                        </div>
+                        <div class="chat-messages-view" id="chatMessagesView">
+                            <div style="text-align: center; color: var(--admin-text-secondary); padding: 40px;">
+                                Select a conversation to view messages
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reports Tab -->
+                <div id="reportsTab" class="hidden">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>User Reports</h3>
+                            <button class="monitor-btn" onclick="refreshReports()">Refresh</button>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Reported User</th>
+                                    <th>Reported By</th>
+                                    <th>Reason</th>
+                                    <th>Time</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportsTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Settings Tab -->
+                <div id="settingsTab" class="hidden">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>Admin Settings</h3>
+                        </div>
+                        <div style="padding: 20px;">
+                            <div class="settings-option" style="margin-bottom: 20px;">
+                                <h4>Monitoring Level</h4>
+                                <select id="monitoringLevel" style="width: 100%; padding: 10px; background: var(--admin-input); border: 1px solid var(--admin-border); color: var(--admin-text); border-radius: 8px;">
+                                    <option value="basic">Basic (User info only)</option>
+                                    <option value="advanced">Advanced (Message monitoring)</option>
+                                    <option value="full">Full (Call recording)</option>
+                                </select>
+                            </div>
+                            <div class="settings-option" style="margin-bottom: 20px;">
+                                <h4>Auto-Ban Settings</h4>
+                                <label style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                                    <input type="checkbox" id="autoBanSpam"> Auto-ban spam accounts
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="checkbox" id="autoBanAbuse"> Auto-ban abusive users
+                                </label>
+                            </div>
+                            <button class="monitor-btn" onclick="saveSettings()">Save Settings</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Login Container -->
+    <div id="loginContainer" class="login-container">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="logo-icon">🔒</div>
+                <h2>Admin Login</h2>
+                <p style="color: var(--admin-text-secondary); margin-top: 10px;">Signal Voice Administration</p>
+            </div>
+            <input type="email" class="login-input" id="adminEmail" placeholder="Admin Email" value="admin@signal.voice">
+            <input type="password" class="login-input" id="adminPassword" placeholder="Password" value="admin123">
+            <button class="login-button" onclick="adminLogin()">Login to Dashboard</button>
+        </div>
+    </div>
+
+    <!-- User Details Modal -->
+    <div id="userModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>User Details</h3>
+                <button class="modal-close" onclick="closeModal('userModal')">✕</button>
+            </div>
+            <div class="modal-body" id="userModalBody">
+                <!-- User details will be populated here -->
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn" onclick="closeModal('userModal')">Close</button>
+                <button class="modal-btn danger" id="banUserBtn">Ban User</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Call Monitor Modal -->
+    <div id="callMonitorModal" class="modal-overlay hidden">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Call Monitor</h3>
+                <button class="modal-close" onclick="closeModal('callMonitorModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="callMonitorContent">
+                    <div style="text-align: center; padding: 20px;">
+                        <div class="spinner"></div>
+                        <p>Connecting to call stream...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" style="position: fixed; top: 20px; right: 20px; z-index: 2000;"></div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, onValue, push, remove, onDisconnect, update, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCzLlsatVXnqT2XDrFIorlU7a_b0Knh4bY",
+            authDomain: "forworder-fde88.firebaseapp.com",
+            databaseURL: "https://forworder-fde88-default-rtdb.firebaseio.com",
+            projectId: "forworder-fde88",
+            storageBucket: "forworder-fde88.firebasestorage.app",
+            messagingSenderId: "100323042084",
+            appId: "1:100323042084:web:accf4ceb45039f756b89b1",
+            measurementId: "G-M7HXVKLPD2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+        const database = getDatabase(app);
+
+        window.database = database;
+        window.ref = ref;
+        window.set = set;
+        window.onValue = onValue;
+        window.push = push;
+        window.remove = remove;
+        window.onDisconnect = onDisconnect;
+        window.update = update;
+        window.get = get;
+    </script>
+
+    <script>
+        // Global variables
+        let isAdmin = false;
+        let currentAdmin = null;
+        let usersData = {};
+        let callsData = {};
+        let messagesData = {};
+        let reportsData = {};
+        let activeListeners = [];
+
+        // DOM elements
+        const loginContainer = document.getElementById('loginContainer');
+        const adminContainer = document.getElementById('adminContainer');
+        const adminSidebar = document.getElementById('adminSidebar');
+        const contentArea = document.getElementById('contentArea');
+        const toastContainer = document.getElementById('toastContainer');
+
+        // Admin credentials (in production, this should be in Firebase with proper auth)
+        const ADMIN_CREDENTIALS = {
+            email: 'admin@signal.voice',
+            password: 'admin123'
+        };
+
+        // Show toast
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                background: var(--admin-surface);
+                border-left: 4px solid ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+                border-radius: 8px;
+                padding: 12px 20px;
+                margin-bottom: 10px;
+                color: var(--admin-text);
+                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                animation: slideIn 0.3s ease;
+            `;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        // Admin login
+        window.adminLogin = function() {
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+
+            if (email === ADMIN_CREDENTIALS.email && password === ADMIN_CREDENTIALS.password) {
+                isAdmin = true;
+                currentAdmin = { email, role: 'super_admin' };
+                
+                loginContainer.classList.add('hidden');
+                adminContainer.classList.remove('hidden');
+                
+                // Start monitoring
+                startAdminMonitoring();
+                showToast('Welcome to Admin Panel', 'success');
+            } else {
+                showToast('Invalid credentials', 'error');
+            }
+        };
+
+        // Start admin monitoring
+        function startAdminMonitoring() {
+            // Listen to users
+            const usersListener = onValue(ref(database, 'users'), (snapshot) => {
+                usersData = snapshot.val() || {};
+                updateAllTabs();
+            });
+            activeListeners.push(usersListener);
+
+            // Listen to calls
+            const callsListener = onValue(ref(database, 'calls'), (snapshot) => {
+                callsData = snapshot.val() || {};
+                updateAllTabs();
+            });
+            activeListeners.push(callsListener);
+        }
+
+        // Update all tabs
+        function updateAllTabs() {
+            updateDashboard();
+            updateUsersTable();
+            updateCallsTable();
+            updateChatSelector();
+            updateReports();
+            updateStats();
+        }
+
+        // Update stats
+        function updateStats() {
+            const totalUsers = Object.keys(usersData).length;
+            const onlineUsers = Object.values(usersData).filter(u => 
+                Object.keys(u.online || {}).length > 0
+            ).length;
+            
+            // Count active calls
+            let activeCalls = 0;
+            Object.values(callsData).forEach(userCalls => {
+                Object.values(userCalls).forEach(call => {
+                    if (call.status === 'connected') activeCalls++;
+                });
+            });
+
+            document.getElementById('totalUsers').textContent = totalUsers;
+            document.getElementById('onlineUsers').textContent = onlineUsers;
+            document.getElementById('activeCalls').textContent = activeCalls;
+            document.getElementById('userBadge').textContent = totalUsers;
+            document.getElementById('callBadge').textContent = activeCalls;
+        }
+
+        // Update dashboard
+        function updateDashboard() {
+            const tbody = document.getElementById('recentUsersBody');
+            if (!tbody) return;
+
+            let html = '';
+            const recentUsers = Object.entries(usersData)
+                .sort((a, b) => (b[1].createdAt || 0) - (a[1].createdAt || 0))
+                .slice(0, 5);
+
+            recentUsers.forEach(([userId, user]) => {
+                const devices = Object.keys(user.online || {}).length;
+                const isOnline = devices > 0;
+                const lastSeen = user.online ? Object.values(user.online)[0]?.lastSeen : null;
+                const timeAgo = lastSeen ? getTimeAgo(lastSeen) : 'Never';
+
+                html += `
+                    <tr>
+                        <td>
+                            <div class="user-cell">
+                                <div class="user-avatar">${user.name?.charAt(0).toUpperCase() || '?'}</div>
+                                <span>${user.name || 'Unknown'}</span>
+                            </div>
+                        </td>
+                        <td>${user.email || 'No email'}</td>
+                        <td><span class="status-badge ${isOnline ? 'online' : 'offline'}">${isOnline ? 'Online' : 'Offline'}</span></td>
+                        <td>${devices}</td>
+                        <td>${timeAgo}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-icon" onclick="viewUser('${userId}')" title="View Details">👁️</button>
+                                <button class="action-icon" onclick="banUser('${userId}')" title="Ban User">🚫</button>
+                                <button class="action-icon" onclick="monitorUser('${userId}')" title="Monitor">📹</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+
+            // Update live calls
+            updateLiveCalls();
+        }
+
+        // Update live calls
+        function updateLiveCalls() {
+            const liveCallsDiv = document.getElementById('liveCallsList');
+            const liveCallCount = document.getElementById('liveCallCount');
+            let html = '';
+            let activeCount = 0;
+
+            Object.entries(callsData).forEach(([userId, userCalls]) => {
+                Object.entries(userCalls).forEach(([callId, call]) => {
+                    if (call.status === 'connected') {
+                        activeCount++;
+                        const fromUser = usersData[call.fromId] || { name: 'Unknown' };
+                        const toUser = usersData[call.toId] || { name: 'Unknown' };
+                        const duration = call.startTime ? Math.floor((Date.now() - call.startTime) / 1000) : 0;
+                        const minutes = Math.floor(duration / 60);
+                        const seconds = duration % 60;
+
+                        html += `
+                            <div class="call-item">
+                                <div class="call-info">
+                                    <div class="call-type">${call.type === 'video' ? '📹' : '📞'}</div>
+                                    <div class="call-details">
+                                        <h4>${fromUser.name} → ${toUser.name}</h4>
+                                        <p>${call.type === 'video' ? 'Video Call' : 'Audio Call'}</p>
+                                    </div>
+                                </div>
+                                <div>
+                                    <span class="call-timer">${minutes.toString().padStart(2,'0')}:${seconds.toString().padStart(2,'0')}</span>
+                                    <button class="monitor-btn" onclick="monitorCall('${callId}')" style="margin-left: 15px;">Monitor</button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            });
+
+            liveCallCount.textContent = activeCount + ' active';
+            
+            if (html === '') {
+                html = '<div style="text-align: center; padding: 40px; color: var(--admin-text-secondary);">No active calls</div>';
+            }
+            
+            liveCallsDiv.innerHTML = html;
+        }
+
+        // Update users table
+        function updateUsersTable() {
+            const tbody = document.getElementById('usersTableBody');
+            if (!tbody) return;
+
+            let html = '';
+
+            Object.entries(usersData).forEach(([userId, user]) => {
+                const devices = Object.keys(user.online || {}).length;
+                const isOnline = devices > 0;
+                const joined = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'Unknown';
+                const lastSeen = user.online ? Object.values(user.online)[0]?.lastSeen : null;
+                const timeAgo = lastSeen ? getTimeAgo(lastSeen) : 'Never';
+
+                html += `
+                    <tr>
+                        <td>
+                            <div class="user-cell">
+                                <div class="user-avatar">${user.name?.charAt(0).toUpperCase() || '?'}</div>
+                                <span>${user.name || 'Unknown'}</span>
+                            </div>
+                        </td>
+                        <td>${user.email || 'No email'}</td>
+                        <td><span class="status-badge ${isOnline ? 'online' : 'offline'}">${isOnline ? 'Online' : 'Offline'}</span></td>
+                        <td>${devices}</td>
+                        <td>${joined}</td>
+                        <td>${timeAgo}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-icon" onclick="viewUser('${userId}')" title="View Details">👁️</button>
+                                <button class="action-icon" onclick="banUser('${userId}')" title="Ban User">🚫</button>
+                                <button class="action-icon" onclick="monitorUser('${userId}')" title="Monitor">📹</button>
+                                <button class="action-icon" onclick="deleteUser('${userId}')" title="Delete User">🗑️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // Update calls table
+        function updateCallsTable() {
+            const tbody = document.getElementById('callsTableBody');
+            if (!tbody) return;
+
+            let html = '';
+            const allCalls = [];
+
+            Object.entries(callsData).forEach(([userId, userCalls]) => {
+                Object.entries(userCalls).forEach(([callId, call]) => {
+                    allCalls.push({ id: callId, ...call });
+                });
+            });
+
+            allCalls.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 20).forEach(call => {
+                const fromUser = usersData[call.fromId] || { name: 'Unknown' };
+                const toUser = usersData[call.toId] || { name: 'Unknown' };
+                const duration = call.startTime && call.endTime ? 
+                    Math.floor((call.endTime - call.startTime) / 1000) : 0;
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                const time = call.timestamp ? new Date(call.timestamp).toLocaleString() : 'Unknown';
+
+                html += `
+                    <tr>
+                        <td>${fromUser.name}</td>
+                        <td>${toUser.name}</td>
+                        <td>${call.type === 'video' ? '📹 Video' : '📞 Audio'}</td>
+                        <td>${minutes}:${seconds.toString().padStart(2,'0')}</td>
+                        <td><span class="status-badge ${call.status}">${call.status}</span></td>
+                        <td>${time}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="action-icon" onclick="viewCallDetails('${call.id}')">👁️</button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html || '<tr><td colspan="7" style="text-align: center;">No call history</td></tr>';
+        }
+
+        // Update chat selector
+        function updateChatSelector() {
+            const select = document.getElementById('chatUserSelect');
+            if (!select) return;
+
+            let options = '<option value="">Select conversation to monitor</option>';
+            
+            Object.entries(usersData).forEach(([userId, user]) => {
+                if (userId !== 'admin') {
+                    options += `<option value="${userId}">${user.name || 'Unknown'} (${user.email || 'No email'})</option>`;
+                }
+            });
+
+            select.innerHTML = options;
+        }
+
+        // Load chat messages
+        window.loadChatMessages = async function() {
+            const userId = document.getElementById('chatUserSelect').value;
+            const chatView = document.getElementById('chatMessagesView');
+            
+            if (!userId) {
+                chatView.innerHTML = '<div style="text-align: center; color: var(--admin-text-secondary); padding: 40px;">Select a conversation to view messages</div>';
+                return;
+            }
+
+            const messages = [];
+            
+            // Get all chats involving this user
+            for (const [otherId, otherUser] of Object.entries(usersData)) {
+                if (otherId === userId) continue;
+                
+                const chatId = [userId, otherId].sort().join('_');
+                const chatRef = ref(database, `messages/${chatId}`);
+                const snapshot = await get(chatRef);
+                
+                if (snapshot.exists()) {
+                    const chatMessages = snapshot.val();
+                    Object.values(chatMessages).forEach(msg => {
+                        messages.push({
+                            ...msg,
+                            chatId,
+                            otherUser: usersData[otherId]?.name || 'Unknown'
+                        });
+                    });
+                }
+            }
+
+            messages.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+            let html = '';
+            messages.forEach(msg => {
+                const time = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : 'Unknown';
+                const sender = msg.senderId === userId ? 'Them' : 'User';
+                html += `
+                    <div class="chat-message-item">
+                        <span class="sender">${sender}:</span>
+                        <span>${msg.text || '[Media message]'}</span>
+                        <span class="time">${time}</span>
+                    </div>
+                `;
+            });
+
+            if (html === '') {
+                html = '<div style="text-align: center; color: var(--admin-text-secondary); padding: 40px;">No messages found</div>';
+            }
+
+            chatView.innerHTML = html;
+        };
+
+        // Update reports
+        function updateReports() {
+            // This would be implemented with a reports collection in Firebase
+        }
+
+        // View user details
+        window.viewUser = function(userId) {
+            const user = usersData[userId];
+            if (!user) return;
+
+            const modalBody = document.getElementById('userModalBody');
+            modalBody.innerHTML = `
+                <p><strong>Name:</strong> ${user.name || 'Unknown'}</p>
+                <p><strong>Email:</strong> ${user.email || 'No email'}</p>
+                <p><strong>Joined:</strong> ${user.createdAt ? new Date(user.createdAt).toLocaleString() : 'Unknown'}</p>
+                <p><strong>Devices:</strong> ${Object.keys(user.online || {}).length}</p>
+                <p><strong>Bio:</strong> ${user.bio || 'No bio'}</p>
+            `;
+
+            document.getElementById('banUserBtn').onclick = () => banUser(userId);
+            document.getElementById('userModal').classList.remove('hidden');
+        };
+
+        // Ban user
+        window.banUser = function(userId) {
+            if (confirm('Are you sure you want to ban this user?')) {
+                // Implement ban logic
+                update(ref(database, `users/${userId}/banned`), true);
+                showToast('User banned successfully', 'success');
+            }
+        };
+
+        // Delete user
+        window.deleteUser = function(userId) {
+            if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+                remove(ref(database, `users/${userId}`));
+                showToast('User deleted', 'success');
+            }
+        };
+
+        // Monitor user
+        window.monitorUser = function(userId) {
+            showToast('Monitoring user: ' + usersData[userId]?.name, 'info');
+            // Implement monitoring logic
+        };
+
+        // Monitor call
+        window.monitorCall = function(callId) {
+            document.getElementById('callMonitorModal').classList.remove('hidden');
+            showToast('Monitoring call: ' + callId, 'info');
+            
+            // Simulate call monitoring
+            setTimeout(() => {
+                document.getElementById('callMonitorContent').innerHTML = `
+                    <div style="text-align: center;">
+                        <h4>Live Call Monitor</h4>
+                        <p>Call ID: ${callId}</p>
+                        <p>Status: Connected</p>
+                        <p>Duration: 00:05:23</p>
+                        <p>Quality: Excellent</p>
+                        <div style="background: #000; height: 200px; margin: 20px 0; display: flex; align-items: center; justify-content: center;">
+                            <span style="color: #666;">Audio Stream (Monitoring)</span>
+                        </div>
+                    </div>
+                `;
+            }, 2000);
+        };
+
+        // View call details
+        window.viewCallDetails = function(callId) {
+            showToast('Call details: ' + callId, 'info');
+        };
+
+        // Export users
+        window.exportUsers = function() {
+            const data = JSON.stringify(usersData, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'users_export.json';
+            a.click();
+            showToast('Users exported', 'success');
+        };
+
+        // Refresh data
+        window.refreshData = function() {
+            updateAllTabs();
+            showToast('Data refreshed', 'success');
+        };
+
+        // Refresh calls
+        window.refreshCalls = function() {
+            updateCallsTable();
+            updateLiveCalls();
+            showToast('Calls refreshed', 'success');
+        };
+
+        // Refresh chats
+        window.refreshChats = function() {
+            loadChatMessages();
+            showToast('Chats refreshed', 'success');
+        };
+
+        // Refresh reports
+        window.refreshReports = function() {
+            updateReports();
+            showToast('Reports refreshed', 'success');
+        };
+
+        // Save settings
+        window.saveSettings = function() {
+            showToast('Settings saved', 'success');
+        };
+
+        // Search users in dashboard
+        window.searchUsers = function() {
+            const search = document.getElementById('dashboardSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#recentUsersBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(search) ? '' : 'none';
+            });
+        };
+
+        // Search users in table
+        window.searchUsersTable = function() {
+            const search = document.getElementById('userSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#usersTableBody tr');
+            
+            rows.forEach(row => {
+                const text = row.textContent.toLowerCase();
+                row.style.display = text.includes(search) ? '' : 'none';
+            });
+        };
+
+        // Switch tabs
+        window.switchTab = function(tab) {
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.currentTarget.classList.add('active');
+
+            // Hide all tabs
+            document.getElementById('dashboardTab').classList.add('hidden');
+            document.getElementById('usersTab').classList.add('hidden');
+            document.getElementById('callsTab').classList.add('hidden');
+            document.getElementById('chatsTab').classList.add('hidden');
+            document.getElementById('reportsTab').classList.add('hidden');
+            document.getElementById('settingsTab').classList.add('hidden');
+
+            // Show selected tab
+            document.getElementById(tab + 'Tab').classList.remove('hidden');
+
+            // Update title
+            const titles = {
+                'dashboard': 'Dashboard',
+                'users': 'User Management',
+                'calls': 'Call Monitor',
+                'chats': 'Chat Monitor',
+                'reports': 'Reports',
+                'settings': 'Settings'
+            };
+            document.getElementById('pageTitle').textContent = titles[tab];
+        };
+
+        // Toggle mobile sidebar
+        window.toggleMobileSidebar = function() {
+            adminSidebar.classList.toggle('mobile-visible');
+        };
+
+        // Close modal
+        window.closeModal = function(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        };
+
+        // Get time ago string
+        function getTimeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            
+            if (seconds < 60) return 'just now';
+            if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+            if (seconds < 86400) return Math.floor(seconds / 3600) + 'h ago';
+            return Math.floor(seconds / 86400) + 'd ago';
+        }
+
+        // Logout
+        window.logout = function() {
+            isAdmin = false;
+            currentAdmin = null;
+            
+            // Remove all listeners
+            activeListeners.forEach(listener => listener());
+            activeListeners = [];
+            
+            adminContainer.classList.add('hidden');
+            loginContainer.classList.remove('hidden');
+            showToast('Logged out', 'info');
+        };
+
+        // Handle mobile menu
+        window.addEventListener('resize', () => {
+            if (window.innerWidth > 768) {
+                adminSidebar.classList.remove('mobile-visible');
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            // Auto login for demo (remove in production)
+            // adminLogin();
+        });
+    </script>
+</body>
+</html>
