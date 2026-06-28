@@ -695,6 +695,7 @@ const MAX_MSG_LEN=4000;
 
 // ===== THREE.JS BACKGROUND =====
 (function initThree(){
+  try{
   const canvas=$('bgCanvas');
   if(!window.THREE||!canvas)return;
   const THREE=window.THREE;
@@ -753,21 +754,29 @@ const MAX_MSG_LEN=4000;
 
   let frame=0;
   function animate(){
-    requestAnimationFrame(animate);
-    frame+=0.004;
-    particles.rotation.y=frame*0.12;
-    particles.rotation.x=frame*0.06;
-    torus.rotation.x=frame*0.3;
-    torus.rotation.y=frame*0.5;
-    t2.rotation.x=-frame*0.4;
-    t2.rotation.z=frame*0.3;
-    renderer.render(scene,camera);
+    try{
+      requestAnimationFrame(animate);
+      frame+=0.004;
+      particles.rotation.y=frame*0.12;
+      particles.rotation.x=frame*0.06;
+      torus.rotation.x=frame*0.3;
+      torus.rotation.y=frame*0.5;
+      t2.rotation.x=-frame*0.4;
+      t2.rotation.z=frame*0.3;
+      renderer.render(scene,camera);
+    }catch(e){}
   }
   animate();
   window.addEventListener('resize',()=>{
-    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth,innerHeight);
+    try{
+      camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth,innerHeight);
+    }catch(e){}
   });
+  }catch(e){
+    const canvas=$('bgCanvas');
+    if(canvas)canvas.style.display='none';
+  }
 })();
 
 // ===== AUTH TABS =====
@@ -852,7 +861,9 @@ function bootApp(d){
   usersOff=onValue(ref(db,'users'),snap=>renderContacts(snap.val()||{}));
   callsOff=onValue(ref(db,`calls/${ME.id}`),snap=>handleIncoming(snap));
   loadDevices();startHB();
-  if(Notification.permission==='default')Notification.requestPermission();
+  try{
+    if(window.Notification&&Notification.permission==='default')Notification.requestPermission().catch(()=>{});
+  }catch(e){}
   toast(`Welcome, ${ME.name}!`,'success','Signed In');
 }
 
@@ -1115,7 +1126,8 @@ window.startCall=async function(video=false){
     showCallUI('calling',chatWith.name,video);
     toast(`Calling ${chatWith.name}…`,'info','Outgoing Call');
   }catch(e){
-    if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'){toast('Microphone or camera permission denied','error','Permission Required');}
+    if(!navigator.mediaDevices){toast('Calls need a secure connection (HTTPS). Ask the site owner to enable it.','error','Unavailable');}
+    else if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'){toast('Microphone or camera permission denied','error','Permission Required');}
     else{toast('Could not start call','error','Error');}
     cleanCall();
   }
@@ -1208,7 +1220,8 @@ window.acceptCall=async function(){
     showCallUI('connected',fromName,video);
     toast('Call connected!','success','Connected');
   }catch(e){
-    if(e.name==='NotAllowedError')toast('Permission denied for mic/camera','error','Permission');
+    if(!navigator.mediaDevices){toast('Calls need a secure connection (HTTPS). Ask the site owner to enable it.','error','Unavailable');}
+    else if(e.name==='NotAllowedError')toast('Permission denied for mic/camera','error','Permission');
     else toast('Could not accept call','error','Error');
     cleanCall();
   }
@@ -1301,8 +1314,8 @@ function handleIncoming(snap){
       $('incName').textContent=call.fromName||'Unknown';
       $('incSub').textContent=call.type==='video'?'📹 Video calling you…':'📞 Voice calling you…';
       $('incOv').classList.remove('hidden');
-      if(sets.notif&&Notification.permission==='granted'){
-        new Notification('📞 Incoming Call',{body:`${call.fromName} is calling`});
+      if(sets.notif&&window.Notification&&Notification.permission==='granted'){
+        try{new Notification('📞 Incoming Call',{body:`${call.fromName} is calling`});}catch(e){}
       }
     }else if((call.status==='ended'||call.status==='cancelled')&&callObj&&callObj.id===key&&!callActive){
       $('incOv').classList.add('hidden');
