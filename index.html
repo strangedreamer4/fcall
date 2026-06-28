@@ -972,25 +972,30 @@ function getSpkCtx(){
   if(!_spkAudioCtx||_spkAudioCtx.state==='closed'){
     _spkAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
   }
-  if(_spkAudioCtx.state==='suspended')_spkAudioCtx.resume().catch(()=>{});
+  // Resume whether suspended or running
+  if(_spkAudioCtx.state==='suspended'){
+    _spkAudioCtx.resume().catch(()=>{});
+  }
   return _spkAudioCtx;
 }
 
 // SPEAKER ROUTING LOGIC:
-//   Earpiece (spkOn=false): <audio> element plays unmuted → OS routes to earpiece by default
-//   Loudspeaker (spkOn=true): AudioContext MediaStreamSource → destination forces loudspeaker
-//                              AND we mute the <audio> element to prevent double audio
+//   Earpiece (spkOn=false): AudioContext fully closed/suspended, <audio> element unmuted
+//                            → OS routes plain <audio> to earpiece by default
+//   Loudspeaker (spkOn=true): <audio> element MUTED, stream routed through AudioContext
+//                              → AudioContext forces OS to use loudspeaker
+//   KEY RULE: only ONE path is active at a time. Never both simultaneously.
 function applySpkRouting(){
   const audioEl=document.getElementById('rAudio');
   const rv=$('remVid');
 
   if(spkOn){
-    // --- LOUDSPEAKER MODE ---
-    // Route stream through AudioContext (forces OS loudspeaker on mobile)
+    // ── LOUDSPEAKER: mute the <audio> element first, then activate AudioContext ──
+    if(audioEl){audioEl.muted=true;}
+    if(rv){rv.muted=true;}
     if(rs){
       try{
         const c=getSpkCtx();
-        // Disconnect old nodes first
         if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
         if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
         _spkSourceNode=c.createMediaStreamSource(rs);
@@ -998,28 +1003,27 @@ function applySpkRouting(){
         _spkGainNode.gain.value=1.0;
         _spkSourceNode.connect(_spkGainNode);
         _spkGainNode.connect(c.destination);
-        // Mute raw elements to avoid double audio
-        if(audioEl){audioEl.muted=true;}
-        if(rv){rv.muted=true;}
       }catch(e){
-        // AudioContext failed — fall back to unmuted element
+        // AudioContext failed — fall back to unmuted element as last resort
         if(audioEl){audioEl.muted=false;audioEl.play().catch(()=>{});}
         if(rv){rv.muted=false;}
       }
     }
   }else{
-    // --- EARPIECE MODE ---
-    // Disconnect AudioContext so it stops forcing the loudspeaker
+    // ── EARPIECE: tear down AudioContext COMPLETELY first, then unmute element ──
     if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
     if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
-    // Unmute the raw elements — OS will route to earpiece (default)
+    // Suspend (not just disconnect) so the OS releases the loudspeaker route
+    if(_spkAudioCtx&&_spkAudioCtx.state!=='closed'){
+      _spkAudioCtx.suspend().catch(()=>{});
+    }
+    // NOW unmute the element — OS routes it to earpiece since AudioContext is suspended
     if(audioEl){
       audioEl.muted=false;
       audioEl.volume=1.0;
       audioEl.play().catch(()=>{});
     }
     if(rv){rv.muted=false;}
-    // setSinkId('') = system default output = earpiece on mobile (where supported)
     if(audioEl&&audioEl.setSinkId){audioEl.setSinkId('').catch(()=>{});}
     if(rv&&rv.setSinkId){rv.setSinkId('').catch(()=>{});}
   }
@@ -1546,6 +1550,10 @@ function cleanCall(){
   SND.ringStop();
   if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
   if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
+  if(_spkAudioCtx&&_spkAudioCtx.state!=='closed'){_spkAudioCtx.suspend().catch(()=>{});}
+  // Mute all audio before removing to prevent a flash of earpiece audio
+  document.querySelectorAll('#rAudio').forEach(a=>{a.muted=true;});
+  if($('remVid'))$('remVid').muted=true;
   if(callTmr){clearInterval(callTmr);callTmr=null;}
   if(qTmr){clearInterval(qTmr);qTmr=null;}
   callStart=null;callActive=false;pendingCandidates=[];
