@@ -584,6 +584,7 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
   <div class="vid-ctrls">
     <button class="cb" id="vMuteB" onclick="togMute()">🎤</button>
     <button class="cb end" onclick="endCall()">📵</button>
+    <button class="cb" id="vSpkB" onclick="togSpk()">🔊</button>
     <button class="cb" id="vCamB" onclick="togCam()">📹</button>
   </div>
 </div>
@@ -1188,7 +1189,11 @@ async function buildPC(targetId,video){
     else{
       document.querySelectorAll('#rAudio').forEach(a=>a.remove());
       const a=document.createElement('audio');a.srcObject=rs;a.autoplay=true;a.id='rAudio';
+      a.muted=!spkOn;
       document.body.appendChild(a);
+      // Apply selected speaker sink device
+      const selectedSink=$('spkSel')?$('spkSel').value:'';
+      if(selectedSink&&a.setSinkId){a.setSinkId(selectedSink).catch(()=>{});}
     }
     callActive=true;
     if($('callSt'))$('callSt').textContent='Connected';
@@ -1309,9 +1314,13 @@ function cleanCall(){
   if($('callT')){$('callT').textContent='00:00';$('callT').classList.add('hidden');}
   if($('callQ'))$('callQ').classList.add('hidden');
   isMuted=false;spkOn=true;camOn=true;
-  $('muteB').textContent='🎤';$('spkB').textContent='🔊';$('camB').textContent='📹';
-  $('vMuteB').textContent='🎤';$('vCamB').textContent='📹';
-  $('muteB').classList.remove('muted');
+  if($('muteB'))$('muteB').textContent='🎤';
+  if($('spkB'))$('spkB').textContent='🔊';
+  if($('camB'))$('camB').textContent='📹';
+  if($('vMuteB'))$('vMuteB').textContent='🎤';
+  if($('vSpkB'))$('vSpkB').textContent='🔊';
+  if($('vCamB'))$('vCamB').textContent='📹';
+  if($('muteB'))$('muteB').classList.remove('muted');
   callObj=null;
 }
 
@@ -1370,22 +1379,37 @@ window.togMute=function(){
   isMuted=!isMuted;
   ls.getAudioTracks().forEach(t=>t.enabled=!isMuted);
   const e=isMuted?'🔇':'🎤';
-  $('muteB').textContent=e;$('vMuteB').textContent=e;
-  $('muteB').classList.toggle('muted',isMuted);
+  if($('muteB')){$('muteB').textContent=e;$('muteB').classList.toggle('muted',isMuted);}
+  if($('vMuteB'))$('vMuteB').textContent=e;
   toast(isMuted?'Microphone muted':'Microphone active','info','Mic');
 };
-window.togSpk=function(){
+window.togSpk=async function(){
   spkOn=!spkOn;
-  document.querySelectorAll('audio').forEach(a=>a.muted=!spkOn);
-  $('spkB').textContent=spkOn?'🔊':'🔈';
-  toast(spkOn?'Speaker on':'Speaker off','info');
+  const icon=spkOn?'🔊':'🔈';
+  // Update both audio-call and video-call speaker buttons (null-safe)
+  if($('spkB'))$('spkB').textContent=icon;
+  if($('vSpkB'))$('vSpkB').textContent=icon;
+  // Mute/unmute all audio elements (earpiece simulation when off)
+  document.querySelectorAll('audio').forEach(a=>{ a.muted=!spkOn; });
+  // Also cover remote video element audio
+  const rv=$('remVid');if(rv)rv.muted=!spkOn;
+  // Try setSinkId: route to selected speaker or default (earpiece) when off
+  const selectedSink=$('spkSel')?$('spkSel').value:'';
+  const targetSink=spkOn?(selectedSink||''):'';
+  const applyToEl=async(el)=>{
+    if(el&&el.setSinkId){try{await el.setSinkId(targetSink);}catch(e){}}
+  };
+  document.querySelectorAll('audio').forEach(a=>applyToEl(a));
+  applyToEl(rv);
+  toast(spkOn?'Speaker on':'Speaker off','info','Speaker');
 };
 window.togCam=function(){
   if(!ls)return;
   camOn=!camOn;
   ls.getVideoTracks().forEach(t=>t.enabled=camOn);
   const e=camOn?'📹':'🚫';
-  $('camB').textContent=e;$('vCamB').textContent=e;
+  if($('camB'))$('camB').textContent=e;
+  if($('vCamB'))$('vCamB').textContent=e;
   toast(camOn?'Camera on':'Camera off','info');
 };
 
@@ -1435,7 +1459,17 @@ window.chgMic=async function(){
 };
 window.chgSpk=async function(){
   const id=$('spkSel').value;
-  document.querySelectorAll('audio').forEach(async a=>{if(a.setSinkId){try{await a.setSinkId(id);}catch(e){}}});
+  // Apply to all audio elements
+  document.querySelectorAll('audio').forEach(async a=>{
+    if(a.setSinkId){try{await a.setSinkId(id);}catch(e){}}
+    a.muted=!spkOn;
+  });
+  // Also apply to remote video element
+  const rv=$('remVid');
+  if(rv){
+    if(rv.setSinkId){try{await rv.setSinkId(id);}catch(e){}}
+    rv.muted=!spkOn;
+  }
   toast('Speaker changed','success');
 };
 window.testMic=async function(){
