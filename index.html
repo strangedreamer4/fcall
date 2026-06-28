@@ -281,9 +281,9 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
 .auth-sec-pill{display:flex;align-items:center;gap:4px;background:rgba(0,245,196,0.07);border:1px solid rgba(0,245,196,0.15);border-radius:20px;padding:3px 8px;font-size:10px;color:var(--emerald);font-family:'JetBrains Mono',monospace}
 
 /* ===== SETTINGS PANEL ===== */
-.p-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:150;animation:fadeOv .18s ease}
-.panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:90%;max-width:420px;max-height:88vh;overflow-y:auto;background:var(--glass2);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border:1px solid var(--border2);border-radius:28px;box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03);z-index:151;animation:pIn .28s cubic-bezier(.34,1.56,.64,1)}
-@keyframes pIn{from{opacity:0;transform:translate(-50%,-54%) scale(.92)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+.p-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);z-index:150;animation:fadeOv .18s ease;display:flex;align-items:center;justify-content:center;padding:24px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.panel{position:relative;width:100%;max-width:420px;max-height:88vh;overflow-y:auto;background:var(--glass2);backdrop-filter:blur(28px);-webkit-backdrop-filter:blur(28px);border:1px solid var(--border2);border-radius:28px;box-shadow:0 24px 80px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.03);z-index:151;animation:pIn .28s cubic-bezier(.34,1.56,.64,1);margin:auto;flex-shrink:0}
+@keyframes pIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
 .p-head{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--glass2);z-index:1;border-radius:28px 28px 0 0}
 .p-head h3{font-size:15px;font-weight:700;font-family:'Outfit',sans-serif}
 .p-body{padding:18px}
@@ -353,7 +353,8 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
   .toast-c{left:14px;right:14px;top:calc(14px + env(safe-area-inset-top))}
   .toast{max-width:100%}
   .loc-vid{width:95px;height:130px;bottom:calc(100px + env(safe-area-inset-bottom))}
-  .panel{width:92%;max-height:82vh}
+  .p-ov{padding:16px}
+  .panel{max-height:90vh}
   .vid-ctrls{bottom:calc(20px + env(safe-area-inset-bottom))}
   .call-btns{gap:12px}
   .cb{width:52px;height:52px}
@@ -562,8 +563,8 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
 </div>
 
 <!-- ===== SETTINGS PANEL ===== -->
-<div id="setOv" class="p-ov hidden" onclick="closeSet()"></div>
-<div id="setP" class="panel hidden">
+<div id="setOv" class="p-ov hidden" onclick="closeSet()">
+<div id="setP" class="panel" onclick="event.stopPropagation()">
   <div class="p-head"><h3>⚙️ Settings</h3><button class="ib" onclick="closeSet()">✕</button></div>
   <div class="p-body">
     <div class="pg">
@@ -602,10 +603,11 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
     </div>
   </div>
 </div>
+</div>
 
 <!-- ===== PROFILE PANEL ===== -->
-<div id="profOv" class="p-ov hidden" onclick="closeProfile()"></div>
-<div id="profP" class="panel hidden">
+<div id="profOv" class="p-ov hidden" onclick="closeProfile()">
+<div id="profP" class="panel" onclick="event.stopPropagation()">
   <div class="p-head"><h3>👤 Profile</h3><button class="ib" onclick="closeProfile()">✕</button></div>
   <div class="prof-panel">
     <div class="ava s80" id="profAva" style="margin:0 auto 14px;font-size:32px">U</div>
@@ -620,6 +622,8 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
     </div>
   </div>
 </div>
+</div>
+
 
 <!-- ===== TOASTS & CTX MENU ===== -->
 <div class="toast-c" id="toastC"></div>
@@ -1333,9 +1337,9 @@ window.togCam=function(){
 };
 
 // ===== SETTINGS =====
-window.openSet=function(){$('setP').classList.remove('hidden');$('setOv').classList.remove('hidden');};
+window.openSet=function(){$('setOv').classList.remove('hidden');};
 window.closeSet=function(){
-  $('setP').classList.add('hidden');$('setOv').classList.add('hidden');
+  $('setOv').classList.add('hidden');
   if(micInt){clearInterval(micInt);micInt=null;}
   const mf=$('micFill'),mp=$('micPct');
   if(mf)mf.style.width='0%';if(mp)mp.textContent='0%';
@@ -1423,9 +1427,8 @@ window.openProfile=function(){
   $('profEditBtn').classList.remove('hidden');
   $('profSaveBtn').classList.add('hidden');
   $('profOv').classList.remove('hidden');
-  $('profP').classList.remove('hidden');
 };
-window.closeProfile=function(){$('profOv').classList.add('hidden');$('profP').classList.add('hidden');};
+window.closeProfile=function(){$('profOv').classList.add('hidden');};
 window.toggleBioEdit=function(){
   const editing=$('profBioEdit').classList.contains('hidden');
   $('profBioEdit').classList.toggle('hidden',!editing);
