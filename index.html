@@ -819,6 +819,200 @@ const MAX_MSG_LEN=4000;
   }
 })();
 
+// ===== SOUND ENGINE (Web Audio API — no external files) =====
+const SND=(()=>{
+  let ctx=null;
+  let ringInterval=null;
+  // Lazy-init AudioContext (must be after user gesture on mobile)
+  function getCtx(){
+    if(!ctx||ctx.state==='closed'){
+      ctx=new(window.AudioContext||window.webkitAudioContext)();
+    }
+    if(ctx.state==='suspended')ctx.resume().catch(()=>{});
+    return ctx;
+  }
+
+  // Core: play a sequence of oscillator notes
+  // notes = [{freq,dur,type,vol,startTime}]
+  function playNotes(notes,dest){
+    const c=getCtx();
+    const out=dest||c.destination;
+    notes.forEach(({freq,dur,type='sine',vol=0.4,startTime=0,endVol})=>{
+      const osc=c.createOscillator();
+      const gain=c.createGain();
+      osc.type=type;
+      osc.frequency.setValueAtTime(freq,c.currentTime+startTime);
+      gain.gain.setValueAtTime(0,c.currentTime+startTime);
+      gain.gain.linearRampToValueAtTime(vol,c.currentTime+startTime+0.01);
+      gain.gain.setValueAtTime(vol,c.currentTime+startTime+dur-0.04);
+      gain.gain.linearRampToValueAtTime(endVol!=null?endVol:0,c.currentTime+startTime+dur);
+      osc.connect(gain);gain.connect(out);
+      osc.start(c.currentTime+startTime);
+      osc.stop(c.currentTime+startTime+dur+0.02);
+    });
+  }
+
+  // Route audio element to a node (for earpiece/speaker switching)
+  let spkDest=null; // null = system default destination
+
+  return{
+    // Message received — soft two-tone pop
+    msgIn(){
+      if(!sets.sound)return;
+      try{
+        playNotes([
+          {freq:880,dur:0.06,type:'sine',vol:0.22,startTime:0},
+          {freq:1100,dur:0.08,type:'sine',vol:0.18,startTime:0.07}
+        ]);
+      }catch(e){}
+    },
+    // Message sent — soft whoosh blip
+    msgOut(){
+      if(!sets.sound)return;
+      try{
+        const c=getCtx();
+        const buf=c.createBuffer(1,c.sampleRate*0.12,c.sampleRate);
+        const d=buf.getChannelData(0);
+        for(let i=0;i<d.length;i++){d[i]=(Math.random()*2-1)*Math.pow(1-(i/d.length),2)*0.15;}
+        const src=c.createBufferSource();src.buffer=buf;
+        const gain=c.createGain();gain.gain.setValueAtTime(0.3,c.currentTime);
+        src.connect(gain);gain.connect(c.destination);
+        src.start();
+        playNotes([{freq:660,dur:0.07,type:'sine',vol:0.12,startTime:0.02}]);
+      }catch(e){}
+    },
+    // Incoming ring — classic phone trill (repeating)
+    ringStart(){
+      if(!sets.sound)return;
+      try{
+        SND.ringStop();
+        const doRing=()=>{
+          // Two-burst ring pattern: ring ring ... pause
+          playNotes([
+            {freq:480,dur:0.18,type:'square',vol:0.25,startTime:0},
+            {freq:420,dur:0.18,type:'square',vol:0.25,startTime:0},
+            {freq:480,dur:0.18,type:'square',vol:0.25,startTime:0.22},
+            {freq:420,dur:0.18,type:'square',vol:0.25,startTime:0.22}
+          ]);
+        };
+        doRing();
+        ringInterval=setInterval(doRing,1200);
+      }catch(e){}
+    },
+    ringStop(){
+      if(ringInterval){clearInterval(ringInterval);ringInterval=null;}
+    },
+    // Outgoing call dial tone
+    dialStart(){
+      if(!sets.sound)return;
+      try{
+        SND.ringStop();
+        const doDial=()=>{
+          playNotes([
+            {freq:440,dur:0.5,type:'sine',vol:0.1,startTime:0},
+            {freq:480,dur:0.5,type:'sine',vol:0.1,startTime:0}
+          ]);
+        };
+        doDial();
+        ringInterval=setInterval(doDial,2000);
+      }catch(e){}
+    },
+    // Call connected chime
+    callConnect(){
+      if(!sets.sound)return;
+      try{
+        playNotes([
+          {freq:523,dur:0.12,type:'sine',vol:0.3,startTime:0},
+          {freq:659,dur:0.12,type:'sine',vol:0.3,startTime:0.13},
+          {freq:784,dur:0.2, type:'sine',vol:0.3,startTime:0.26}
+        ]);
+      }catch(e){}
+    },
+    // Call ended / hung up tone
+    callEnd(){
+      if(!sets.sound)return;
+      try{
+        playNotes([
+          {freq:440,dur:0.15,type:'sine',vol:0.25,startTime:0},
+          {freq:330,dur:0.2, type:'sine',vol:0.2, startTime:0.18}
+        ]);
+      }catch(e){}
+    },
+    // Notification pop (new contact online etc.)
+    notif(){
+      if(!sets.sound)return;
+      try{
+        playNotes([
+          {freq:740,dur:0.09,type:'sine',vol:0.18,startTime:0},
+          {freq:988,dur:0.1, type:'sine',vol:0.15,startTime:0.1}
+        ]);
+      }catch(e){}
+    },
+    // Unlock AudioContext on first user gesture (mobile requirement)
+    unlock(){
+      try{getCtx();}catch(e){}
+    }
+  };
+})();
+
+// Unlock audio on first tap/click (iOS/Android requirement)
+document.addEventListener('touchstart',()=>SND.unlock(),{once:true,passive:true});
+document.addEventListener('click',()=>SND.unlock(),{once:true});
+
+// ===== SPEAKER ROUTING ENGINE =====
+// On mobile browsers setSinkId is rarely available.
+// The real earpiece vs. loudspeaker switch is done via AudioContext routing:
+//   spkOn=true  → route remote audio through AudioContext → speaker destination
+//   spkOn=false → play as a plain <audio> element (OS routes to earpiece by default)
+let _spkAudioCtx=null;
+let _spkSourceNode=null;
+let _spkGainNode=null;
+
+function getSpkCtx(){
+  if(!_spkAudioCtx||_spkAudioCtx.state==='closed'){
+    _spkAudioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  }
+  if(_spkAudioCtx.state==='suspended')_spkAudioCtx.resume().catch(()=>{});
+  return _spkAudioCtx;
+}
+
+// Call this whenever remote stream (rs) is set or spkOn changes
+function applySpkRouting(){
+  if(!rs)return;
+  const audioEl=document.getElementById('rAudio');
+  if(!audioEl&&!$('remVid'))return;
+
+  if(spkOn){
+    // Route through AudioContext → forces loudspeaker on mobile
+    try{
+      const c=getSpkCtx();
+      if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){}}
+      if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){}}
+      _spkSourceNode=c.createMediaStreamSource(rs);
+      _spkGainNode=c.createGain();
+      _spkGainNode.gain.value=1.0;
+      _spkSourceNode.connect(_spkGainNode);
+      _spkGainNode.connect(c.destination);
+      // Mute the raw audio element so we don't get double audio
+      if(audioEl)audioEl.muted=true;
+      const rv=$('remVid');if(rv)rv.muted=true;
+    }catch(e){
+      // Fallback: just unmute
+      if(audioEl)audioEl.muted=false;
+    }
+  }else{
+    // Disconnect AudioContext routing → OS routes to earpiece
+    if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){}  _spkSourceNode=null;}
+    if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){}      _spkGainNode=null;}
+    // Unmute element so audio plays (earpiece route)
+    if(audioEl)audioEl.muted=false;
+    const rv=$('remVid');if(rv)rv.muted=false;
+    // setSinkId to '' = default (earpiece) where supported
+    if(audioEl&&audioEl.setSinkId){audioEl.setSinkId('').catch(()=>{});}
+    if($('remVid')&&$('remVid').setSinkId){$('remVid').setSinkId('').catch(()=>{});}
+  }
+}
+
 // ===== AUTH TABS =====
 window.sw=function(t){
   $('tabL').classList.toggle('on',t==='login');
@@ -967,10 +1161,34 @@ function watchStatus(){
 // ===== MESSAGES =====
 function chatRoomId(){return[ME.id,chatWith.id].sort().join('__');}
 
+let _knownMsgIds=new Set(); // track known IDs so we don't beep on initial load
+let _msgsInitialized=false;
+
 function loadMsgs(){
+  _knownMsgIds.clear();
+  _msgsInitialized=false;
   const{db,ref,onValue,update}=fb();
   msgsOff=onValue(ref(db,`messages/${chatRoomId()}`),snap=>{
     const data=snap.val()||{};
+    // On first load, populate known IDs silently
+    if(!_msgsInitialized){
+      Object.keys(data).forEach(id=>_knownMsgIds.add(id));
+      _msgsInitialized=true;
+    }else{
+      // Check for genuinely new incoming messages
+      Object.entries(data).forEach(([id,m])=>{
+        if(!_knownMsgIds.has(id)){
+          _knownMsgIds.add(id);
+          if(m&&m.from&&m.from!==ME.id){
+            SND.msgIn();
+            // Desktop notification for messages when app is in background
+            if(sets.notif&&document.hidden&&window.Notification&&Notification.permission==='granted'){
+              try{new Notification(`💬 ${m.fromName||'Message'}`,{body:m.type==='text'?m.text:'📎 Sent an attachment'});}catch(e){}
+            }
+          }
+        }
+      });
+    }
     renderMsgs(data);
     Object.entries(data).forEach(([id,m])=>{
       if(!m||m.to!==ME.id)return;
@@ -1022,6 +1240,7 @@ window.sendMsg=async function(){
   const{db,ref,push,set}=fb();
   const msgRef=push(ref(db,`messages/${chatRoomId()}`));
   await set(msgRef,{from:ME.id,fromName:ME.name,to:chatWith.id,type:'text',text,ts:Date.now(),delivered:false,read:false});
+  SND.msgOut();
   i.value='';resize(i);clearTyp();
 };
 
@@ -1165,6 +1384,7 @@ window.startCall=async function(video=false){
     });
     callListeners=[u1,u2,u3];
     showCallUI('calling',chatWith.name,video);
+    SND.dialStart();
     toast(`Calling ${chatWith.name}…`,'info','Outgoing Call');
   }catch(e){
     if(!navigator.mediaDevices){toast('Calls need a secure connection (HTTPS). Ask the site owner to enable it.','error','Unavailable');}
@@ -1189,13 +1409,16 @@ async function buildPC(targetId,video){
     else{
       document.querySelectorAll('#rAudio').forEach(a=>a.remove());
       const a=document.createElement('audio');a.srcObject=rs;a.autoplay=true;a.id='rAudio';
-      a.muted=!spkOn;
+      a.muted=true; // always muted initially; applySpkRouting controls actual output
       document.body.appendChild(a);
-      // Apply selected speaker sink device
+      // Apply selected speaker sink device (for browsers that support it)
       const selectedSink=$('spkSel')?$('spkSel').value:'';
       if(selectedSink&&a.setSinkId){a.setSinkId(selectedSink).catch(()=>{});}
     }
+    SND.ringStop();
+    SND.callConnect();
     callActive=true;
+    applySpkRouting(); // route to speaker or earpiece based on spkOn state
     if($('callSt'))$('callSt').textContent='Connected';
     if($('callT'))$('callT').classList.remove('hidden');
     if($('callQ'))$('callQ').classList.remove('hidden');
@@ -1229,6 +1452,7 @@ function showCallUI(status,name,video){
 
 window.acceptCall=async function(){
   $('incOv').classList.add('hidden');
+  SND.ringStop();
   if(!callObj)return;
   try{
     const video=callObj.type==='video';
@@ -1274,6 +1498,7 @@ window.acceptCall=async function(){
 
 window.rejectCall=async function(){
   $('incOv').classList.add('hidden');
+  SND.ringStop();
   if(callObj){
     const{db,ref,update}=fb();
     const uid=callObj.fromId;
@@ -1286,6 +1511,8 @@ window.rejectCall=async function(){
 
 window.endCall=async function(){
   endedByMe=true;
+  SND.ringStop();
+  SND.callEnd();
   if(callObj){
     const{db,ref,update}=fb();
     const uid=callObj.toId||callObj.fromId;
@@ -1300,6 +1527,9 @@ window.endCall=async function(){
 };
 
 function cleanCall(){
+  SND.ringStop();
+  if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
+  if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
   if(callTmr){clearInterval(callTmr);callTmr=null;}
   if(qTmr){clearInterval(qTmr);qTmr=null;}
   callStart=null;callActive=false;pendingCandidates=[];
@@ -1363,11 +1593,13 @@ function handleIncoming(snap){
       $('incName').textContent=call.fromName||'Unknown';
       $('incSub').textContent=call.type==='video'?'📹 Video calling you…':'📞 Voice calling you…';
       $('incOv').classList.remove('hidden');
+      SND.ringStart();
       if(sets.notif&&window.Notification&&Notification.permission==='granted'){
         try{new Notification('📞 Incoming Call',{body:`${call.fromName} is calling`});}catch(e){}
       }
     }else if((call.status==='ended'||call.status==='cancelled')&&callObj&&callObj.id===key&&!callActive){
       $('incOv').classList.add('hidden');
+      SND.ringStop();
       toast('Missed call','info','Call Ended');
       callObj=null;
     }
@@ -1386,22 +1618,11 @@ window.togMute=function(){
 window.togSpk=async function(){
   spkOn=!spkOn;
   const icon=spkOn?'🔊':'🔈';
-  // Update both audio-call and video-call speaker buttons (null-safe)
   if($('spkB'))$('spkB').textContent=icon;
   if($('vSpkB'))$('vSpkB').textContent=icon;
-  // Mute/unmute all audio elements (earpiece simulation when off)
-  document.querySelectorAll('audio').forEach(a=>{ a.muted=!spkOn; });
-  // Also cover remote video element audio
-  const rv=$('remVid');if(rv)rv.muted=!spkOn;
-  // Try setSinkId: route to selected speaker or default (earpiece) when off
-  const selectedSink=$('spkSel')?$('spkSel').value:'';
-  const targetSink=spkOn?(selectedSink||''):'';
-  const applyToEl=async(el)=>{
-    if(el&&el.setSinkId){try{await el.setSinkId(targetSink);}catch(e){}}
-  };
-  document.querySelectorAll('audio').forEach(a=>applyToEl(a));
-  applyToEl(rv);
-  toast(spkOn?'Speaker on':'Speaker off','info','Speaker');
+  // Route audio through AudioContext (loudspeaker) or leave as plain element (earpiece)
+  applySpkRouting();
+  toast(spkOn?'📢 Loudspeaker on':'👂 Earpiece mode','info','Speaker');
 };
 window.togCam=function(){
   if(!ls)return;
@@ -1459,17 +1680,14 @@ window.chgMic=async function(){
 };
 window.chgSpk=async function(){
   const id=$('spkSel').value;
-  // Apply to all audio elements
+  // Apply setSinkId to audio elements where supported
   document.querySelectorAll('audio').forEach(async a=>{
     if(a.setSinkId){try{await a.setSinkId(id);}catch(e){}}
-    a.muted=!spkOn;
   });
-  // Also apply to remote video element
   const rv=$('remVid');
-  if(rv){
-    if(rv.setSinkId){try{await rv.setSinkId(id);}catch(e){}}
-    rv.muted=!spkOn;
-  }
+  if(rv&&rv.setSinkId){try{await rv.setSinkId(id);}catch(e){}}
+  // Re-apply routing so AudioContext routes to new device if speaker is on
+  if(rs)applySpkRouting();
   toast('Speaker changed','success');
 };
 window.testMic=async function(){
