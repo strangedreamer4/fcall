@@ -181,7 +181,12 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
 .ei:hover{background:var(--surface3);transform:scale(1.2)}
 
 /* ===== WELCOME ===== */
+.wmob-head{display:none;align-items:center;min-height:56px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);flex-shrink:0;z-index:5}
+.wmob-title{font-family:'Outfit',sans-serif;font-size:15px;font-weight:800;letter-spacing:-.3px}
+.wmob-title em{background:linear-gradient(135deg,var(--cyan),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-style:normal}
 .welcome{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;text-align:center}
+.w-mob-browse-btn{display:none;align-items:center;gap:8px;margin-top:24px;padding:12px 22px;background:linear-gradient(135deg,var(--cyan),var(--violet));border:none;border-radius:14px;color:#fff;font-weight:700;font-size:13.5px;font-family:'Outfit',sans-serif;cursor:pointer;box-shadow:0 4px 16px var(--cyan-glow2)}
+.w-mob-browse-btn:active{transform:scale(.96)}
 .w-3d-icon{width:88px;height:88px;margin:0 auto 22px;position:relative;display:flex;align-items:center;justify-content:center}
 .w-ring{position:absolute;border-radius:50%;border:1px solid;animation:wRot linear infinite}
 .w-ring:nth-child(1){width:88px;height:88px;border-color:rgba(0,212,255,0.25);animation-duration:7s}
@@ -351,6 +356,8 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
   .s-ov.open{display:block}
   .mob-tog{display:flex}
   .auth-card{max-width:440px}
+  .wmob-head{display:flex;padding-top:env(safe-area-inset-top)}
+  .w-mob-browse-btn{display:flex}
 }
 
 /* Phones: tighter spacing, full-width essentials, bigger touch targets */
@@ -473,6 +480,10 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
   </div>
 
   <div class="chat">
+    <div class="wmob-head" id="wMobHead">
+      <button class="mob-tog" onclick="openSB()">☰</button>
+      <span class="wmob-title">Voices<em>Flow</em></span>
+    </div>
     <div class="welcome" id="wScreen">
       <div class="w-3d-icon">
         <div class="w-ring"></div><div class="w-ring"></div><div class="w-ring"></div>
@@ -486,6 +497,7 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
         <div class="w-tip"><span>📁</span><span>File Sharing</span></div>
         <div class="w-tip"><span>⚡</span><span>Real-time</span></div>
       </div>
+      <button class="w-mob-browse-btn" id="wBrowseBtn" onclick="openSB()">👥 Browse People</button>
     </div>
     <div id="cView" class="hidden" style="flex-direction:column;height:100%">
       <div class="chat-head">
@@ -930,6 +942,7 @@ window.openChat=function(uid,name,email){
   $('typName').textContent=name+' is typing…';
   $('sessionKey').textContent=genSessionKey();
   $('wScreen').classList.add('hidden');
+  $('wMobHead').classList.add('hidden');
   const cv=$('cView');cv.classList.remove('hidden');cv.style.display='flex';
   loadMsgs();listenTyping();watchStatus();
   closeSB();renderContacts(allUsers);
@@ -1509,6 +1522,7 @@ window.doLogout=async function(){
   cv.classList.add('hidden');
   cv.style.display='';
   $('wScreen').classList.remove('hidden');
+  $('wMobHead').classList.remove('hidden');
   $('app').classList.add('hidden');
   $('auth').classList.remove('hidden');
   $('lPass').value='';
