@@ -568,7 +568,7 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
     <div class="call-btns">
       <button class="cb" id="muteB" onclick="togMute()" title="Mute">🎤</button>
       <button class="cb end" onclick="endCall()" title="End">📵</button>
-      <button class="cb" id="spkB" onclick="togSpk()" title="Speaker">🔊</button>
+      <button class="cb" id="spkB" onclick="togSpk()" title="Speaker">🔈</button>
       <button class="cb" id="camB" onclick="togCam()" title="Camera">📹</button>
     </div>
   </div>
@@ -584,7 +584,7 @@ body{font-family:'Space Grotesk',sans-serif;color:var(--text);-webkit-font-smoot
   <div class="vid-ctrls">
     <button class="cb" id="vMuteB" onclick="togMute()">🎤</button>
     <button class="cb end" onclick="endCall()">📵</button>
-    <button class="cb" id="vSpkB" onclick="togSpk()">🔊</button>
+    <button class="cb" id="vSpkB" onclick="togSpk()">🔈</button>
     <button class="cb" id="vCamB" onclick="togCam()">📹</button>
   </div>
 </div>
@@ -726,7 +726,7 @@ let typTmr=null,hb=null,micInt=null,qTmr=null;
 let sets={sound:true,notif:true,read:true,typing:true,online:true};
 let pc=null,ls=null,rs=null,callObj=null,callTmr=null,callStart=null;
 let callListeners=[];
-let isMuted=false,spkOn=true,camOn=true,callActive=false,endedByMe=false;
+let isMuted=false,spkOn=false,camOn=true,callActive=false,endedByMe=false;
 let pendingCandidates=[];
 let allUsers={};
 let ctxId=null,ctxOwn=false;
@@ -976,40 +976,52 @@ function getSpkCtx(){
   return _spkAudioCtx;
 }
 
-// Call this whenever remote stream (rs) is set or spkOn changes
+// SPEAKER ROUTING LOGIC:
+//   Earpiece (spkOn=false): <audio> element plays unmuted → OS routes to earpiece by default
+//   Loudspeaker (spkOn=true): AudioContext MediaStreamSource → destination forces loudspeaker
+//                              AND we mute the <audio> element to prevent double audio
 function applySpkRouting(){
-  if(!rs)return;
   const audioEl=document.getElementById('rAudio');
-  if(!audioEl&&!$('remVid'))return;
+  const rv=$('remVid');
 
   if(spkOn){
-    // Route through AudioContext → forces loudspeaker on mobile
-    try{
-      const c=getSpkCtx();
-      if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){}}
-      if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){}}
-      _spkSourceNode=c.createMediaStreamSource(rs);
-      _spkGainNode=c.createGain();
-      _spkGainNode.gain.value=1.0;
-      _spkSourceNode.connect(_spkGainNode);
-      _spkGainNode.connect(c.destination);
-      // Mute the raw audio element so we don't get double audio
-      if(audioEl)audioEl.muted=true;
-      const rv=$('remVid');if(rv)rv.muted=true;
-    }catch(e){
-      // Fallback: just unmute
-      if(audioEl)audioEl.muted=false;
+    // --- LOUDSPEAKER MODE ---
+    // Route stream through AudioContext (forces OS loudspeaker on mobile)
+    if(rs){
+      try{
+        const c=getSpkCtx();
+        // Disconnect old nodes first
+        if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
+        if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
+        _spkSourceNode=c.createMediaStreamSource(rs);
+        _spkGainNode=c.createGain();
+        _spkGainNode.gain.value=1.0;
+        _spkSourceNode.connect(_spkGainNode);
+        _spkGainNode.connect(c.destination);
+        // Mute raw elements to avoid double audio
+        if(audioEl){audioEl.muted=true;}
+        if(rv){rv.muted=true;}
+      }catch(e){
+        // AudioContext failed — fall back to unmuted element
+        if(audioEl){audioEl.muted=false;audioEl.play().catch(()=>{});}
+        if(rv){rv.muted=false;}
+      }
     }
   }else{
-    // Disconnect AudioContext routing → OS routes to earpiece
-    if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){}  _spkSourceNode=null;}
-    if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){}      _spkGainNode=null;}
-    // Unmute element so audio plays (earpiece route)
-    if(audioEl)audioEl.muted=false;
-    const rv=$('remVid');if(rv)rv.muted=false;
-    // setSinkId to '' = default (earpiece) where supported
+    // --- EARPIECE MODE ---
+    // Disconnect AudioContext so it stops forcing the loudspeaker
+    if(_spkSourceNode){try{_spkSourceNode.disconnect();}catch(e){} _spkSourceNode=null;}
+    if(_spkGainNode){try{_spkGainNode.disconnect();}catch(e){} _spkGainNode=null;}
+    // Unmute the raw elements — OS will route to earpiece (default)
+    if(audioEl){
+      audioEl.muted=false;
+      audioEl.volume=1.0;
+      audioEl.play().catch(()=>{});
+    }
+    if(rv){rv.muted=false;}
+    // setSinkId('') = system default output = earpiece on mobile (where supported)
     if(audioEl&&audioEl.setSinkId){audioEl.setSinkId('').catch(()=>{});}
-    if($('remVid')&&$('remVid').setSinkId){$('remVid').setSinkId('').catch(()=>{});}
+    if(rv&&rv.setSinkId){rv.setSinkId('').catch(()=>{});}
   }
 }
 
@@ -1405,20 +1417,24 @@ async function buildPC(targetId,video){
   };
   pc.ontrack=ev=>{
     rs=ev.streams[0];
-    if(video){if($('remVid'))$('remVid').srcObject=rs;}
-    else{
+    if(video){
+      if($('remVid')){$('remVid').srcObject=rs;$('remVid').muted=false;}
+    }else{
       document.querySelectorAll('#rAudio').forEach(a=>a.remove());
-      const a=document.createElement('audio');a.srcObject=rs;a.autoplay=true;a.id='rAudio';
-      a.muted=true; // always muted initially; applySpkRouting controls actual output
+      const a=document.createElement('audio');
+      a.srcObject=rs;
+      a.autoplay=true;
+      a.id='rAudio';
+      a.muted=false;   // ALWAYS unmuted — earpiece mode plays through this element
+      a.volume=1.0;
       document.body.appendChild(a);
-      // Apply selected speaker sink device (for browsers that support it)
-      const selectedSink=$('spkSel')?$('spkSel').value:'';
-      if(selectedSink&&a.setSinkId){a.setSinkId(selectedSink).catch(()=>{});}
+      // Try to play immediately (needed on some mobile browsers)
+      a.play().catch(()=>{});
     }
     SND.ringStop();
     SND.callConnect();
     callActive=true;
-    applySpkRouting(); // route to speaker or earpiece based on spkOn state
+    applySpkRouting(); // additionally routes to loudspeaker if spkOn=true
     if($('callSt'))$('callSt').textContent='Connected';
     if($('callT'))$('callT').classList.remove('hidden');
     if($('callQ'))$('callQ').classList.remove('hidden');
@@ -1543,12 +1559,12 @@ function cleanCall(){
   $('callOv').classList.add('hidden');$('vidOv').classList.add('hidden');$('incOv').classList.add('hidden');
   if($('callT')){$('callT').textContent='00:00';$('callT').classList.add('hidden');}
   if($('callQ'))$('callQ').classList.add('hidden');
-  isMuted=false;spkOn=true;camOn=true;
+  isMuted=false;spkOn=false;camOn=true;
   if($('muteB'))$('muteB').textContent='🎤';
-  if($('spkB'))$('spkB').textContent='🔊';
+  if($('spkB'))$('spkB').textContent='🔈';
   if($('camB'))$('camB').textContent='📹';
   if($('vMuteB'))$('vMuteB').textContent='🎤';
-  if($('vSpkB'))$('vSpkB').textContent='🔊';
+  if($('vSpkB'))$('vSpkB').textContent='🔈';
   if($('vCamB'))$('vCamB').textContent='📹';
   if($('muteB'))$('muteB').classList.remove('muted');
   callObj=null;
@@ -1622,7 +1638,7 @@ window.togSpk=async function(){
   if($('vSpkB'))$('vSpkB').textContent=icon;
   // Route audio through AudioContext (loudspeaker) or leave as plain element (earpiece)
   applySpkRouting();
-  toast(spkOn?'📢 Loudspeaker on':'👂 Earpiece mode','info','Speaker');
+  toast(spkOn?'🔊 Loudspeaker on':'🔈 Earpiece mode','info','Speaker');
 };
 window.togCam=function(){
   if(!ls)return;
